@@ -365,6 +365,16 @@ async function sendOrderRequest() {
       return;
     }
 
+    // Báo lỗi rõ khi món vừa hết hàng hoặc ngừng kinh doanh lúc khách bấm đặt (T3D28BB)
+    const errCode = err.code || (err.data && err.data.error && err.data.error.code) || "";
+    if (errCode === "DISH_OUT_OF_STOCK" || errCode === "DISH_INACTIVE") {
+      showToast(err.message, "error");
+      if (confirm(`⚠️ ${err.message}\n\nBạn có muốn quay lại Giỏ hàng để đổi món khác không?`)) {
+        window.location.href = "cart.html";
+      }
+      return;
+    }
+
     showToast(err.message || "Không thể đặt hàng, vui lòng thử lại", "error");
   }
 }
