@@ -1,66 +1,72 @@
-"""Script tạo tài khoản Admin cho NightFood (FR-08, 8.7, NFR-03, NFR-10)."""
+"""Script khởi tạo tài khoản Admin mặc định cho NightFood.
+Chạy: python scripts/create_admin.py [username] [password] [full_name]
+"""
 import os
 import sys
 
-# Đảm bảo in UTF-8 trên Windows console
-if sys.platform == "win32":
-    try:
-        sys.stdout.reconfigure(encoding="utf-8")
-        sys.stderr.reconfigure(encoding="utf-8")
-    except Exception:
-        pass
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
-# Thêm thư mục backend vào sys.path
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-
+from sqlalchemy import text
 from app.core.auth import hash_password
-from app.db.session import SessionLocal
+from app.db.session import SessionLocal, engine, Base
+import app.models  # noqa: F401
 from app.models.user import User
 
 
-def create_or_update_admin(username: str, password: str, full_name: str = "Quản Trị Viên NightFood"):
+def init_db_if_needed():
+    """Đảm bảo cấu trúc bảng trong MySQL khớp với schema.sql và sample_data.sql."""
+    with engine.connect() as conn:
+        try:
+            conn.execute(text("SELECT username FROM users LIMIT 1"))
+            return
+        except Exception:
+            print("[DB] Updating schema from database/schema.sql and database/sample_data.sql...")
+
+    base_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
+    schema_path = os.path.join(base_dir, "database", "schema.sql")
+    sample_path = os.path.join(base_dir, "database", "sample_data.sql")
+
+    with engine.begin() as conn:
+        for sql_file in [schema_path, sample_path]:
+            if os.path.exists(sql_file):
+                with open(sql_file, "r", encoding="utf-8") as f:
+                    content = f.read()
+                for stmt in content.split(";"):
+                    lines = [line for line in stmt.splitlines() if not line.strip().startswith("--")]
+                    clean_stmt = "\n".join(lines).strip()
+                    if clean_stmt:
+                        conn.execute(text(clean_stmt))
+    Base.metadata.create_all(bind=engine)
+
+
+def ensure_admin(username: str = "admin", password: str = "admin123", full_name: str = "Quản Trị Viên NightFood"):
+    init_db_if_needed()
     db = SessionLocal()
     try:
         user = db.query(User).filter(User.username == username).first()
-        hashed = hash_password(password)
-
         if user:
-            print(f"[!] Tai khoan '{username}' da ton tai -> Cap nhat mat khau va quyen admin.")
-            user.password_hash = hashed
+            user.password_hash = hash_password(password)
             user.role = "admin"
             user.is_active = True
             user.full_name = full_name
         else:
             user = User(
                 username=username,
-                password_hash=hashed,
+                password_hash=hash_password(password),
                 full_name=full_name,
+                phone="0988888999",
                 role="admin",
                 is_active=True,
             )
             db.add(user)
-
         db.commit()
-        print(f"[OK] Tao thanh cong tai khoan Admin:")
-        print(f"     Username:  {username}")
-        print(f"     Full Name: {full_name}")
-        print(f"     Role:      admin")
-    except Exception as e:
-        db.rollback()
-        print(f"[ERROR] Loi tao tai khoan admin: {e}")
+        print(f"[OK] Admin user '{username}' is ready.")
     finally:
         db.close()
 
 
 if __name__ == "__main__":
-    if len(sys.argv) >= 3:
-        u = sys.argv[1]
-        p = sys.argv[2]
-        fn = sys.argv[3] if len(sys.argv) > 3 else "Quản Trị Viên"
-    else:
-        print("=== TAO TAI KHOAN ADMIN NIGHTFOOD ===")
-        u = input("Nhap username: ").strip() or "admin"
-        p = input("Nhap mat khau: ").strip() or "admin123"
-        fn = input("Nhap ho ten: ").strip() or "Quản Trị Viên"
-
-    create_or_update_admin(u, p, fn)
+    u = sys.argv[1] if len(sys.argv) > 1 else "admin"
+    p = sys.argv[2] if len(sys.argv) > 2 else "admin123"
+    n = sys.argv[3] if len(sys.argv) > 3 else "Quản Trị Viên NightFood"
+    ensure_admin(u, p, n)
