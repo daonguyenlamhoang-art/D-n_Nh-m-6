@@ -49,14 +49,22 @@
         </div>
       </div>
 
-      <!-- Bộ lọc và tìm kiếm -->
+      <!-- Bộ lọc và tìm kiếm (T3D221F) -->
       <div class="card-panel" style="padding:16px; margin-bottom:20px; display:flex; gap:16px; align-items:center; flex-wrap:wrap;">
-        <div style="flex-grow:1; max-width:360px;">
+        <div style="flex-grow:1; max-width:340px;">
           <input type="text" id="admin-dish-search" class="form-control" placeholder="Tìm theo tên món..." style="padding:8px 12px; font-size:0.9rem;">
         </div>
         <div style="min-width:200px;">
           <select id="admin-dish-cat-filter" class="form-control" style="padding:8px 12px; font-size:0.9rem;">
             <option value="">-- Tất cả danh mục --</option>
+          </select>
+        </div>
+        <div style="min-width:190px;">
+          <select id="admin-dish-status-filter" class="form-control" style="padding:8px 12px; font-size:0.9rem;">
+            <option value="">-- Tất cả trạng thái --</option>
+            <option value="AVAILABLE">Đang bán (Còn món)</option>
+            <option value="OUT_OF_STOCK">Hết món trong ngày</option>
+            <option value="HIDDEN">Đang ẩn</option>
           </select>
         </div>
       </div>
@@ -114,8 +122,11 @@
           </div>
 
           <div class="form-group">
-            <label class="form-label">Link ảnh món (URL bắt đầu bằng http:// hoặc https://)</label>
-            <input type="url" id="dish-form-img" class="form-control" placeholder="https://images.unsplash.com/...">
+            <label class="form-label">Ảnh món ăn (Nhập URL hoặc Upload file từ máy - T3D221F)</label>
+            <div style="display:flex; gap:10px; align-items:center;">
+              <input type="text" id="dish-form-img" class="form-control" placeholder="https://images.unsplash.com/... hoặc /assets/uploads/...">
+              <input type="file" id="dish-form-file" accept="image/*" style="max-width:210px; font-size:0.82rem; color:var(--text-muted);">
+            </div>
           </div>
 
           <div class="form-group">
@@ -123,15 +134,30 @@
             <textarea id="dish-form-desc" class="form-control" rows="2" placeholder="Mô tả nguyên liệu, hương vị..."></textarea>
           </div>
 
-          <div style="display:flex; gap:20px;">
+          <div style="display:flex; gap:18px; flex-wrap:wrap; margin-bottom:16px;">
             <label style="display:flex; align-items:center; gap:8px; cursor:pointer;">
               <input type="checkbox" id="dish-form-available" checked>
-              <span>Còn hàng (cho phép khách đặt)</span>
+              <span>Đang bán (Còn hàng)</span>
             </label>
             <label style="display:flex; align-items:center; gap:8px; cursor:pointer;">
               <input type="checkbox" id="dish-form-active" checked>
               <span>Hiển thị trên web</span>
             </label>
+            <label style="display:flex; align-items:center; gap:8px; cursor:pointer;">
+              <input type="checkbox" id="dish-form-featured">
+              <span style="color:var(--accent-secondary); font-weight:600;">⭐ Món nổi bật</span>
+            </label>
+          </div>
+
+          <!-- Cấu hình nhóm tuỳ chọn (Size / Topping) - T3D221F -->
+          <div style="border-top:1px solid var(--border-color); padding-top:14px;">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+              <label class="form-label" style="margin-bottom:0;">⚙️ Cấu hình Tuỳ chọn món (Size / Topping)</label>
+              <button type="button" id="btn-add-option-row" class="btn btn-secondary" style="padding:4px 10px; font-size:0.8rem;">
+                + Thêm tuỳ chọn
+              </button>
+            </div>
+            <div id="dish-options-builder" style="display:flex; flex-direction:column; gap:8px; max-height:180px; overflow-y:auto;"></div>
           </div>
         </div>
         <div class="modal-footer">
@@ -162,6 +188,11 @@
       // Sự kiện tìm kiếm & lọc
       document.getElementById("admin-dish-search").addEventListener("input", () => loadDishes());
       document.getElementById("admin-dish-cat-filter").addEventListener("change", () => loadDishes());
+      document.getElementById("admin-dish-status-filter").addEventListener("change", () => loadDishes());
+
+      // Upload ảnh
+      document.getElementById("dish-form-file").addEventListener("change", handleUploadImageFile);
+      document.getElementById("btn-add-option-row").addEventListener("click", () => addOptionBuilderRow());
 
       // Modal
       document.getElementById("btn-open-add-dish").addEventListener("click", () => openDishModal());
@@ -169,6 +200,48 @@
       document.getElementById("modal-dish-cancel").addEventListener("click", closeDishModal);
       document.getElementById("dish-form").addEventListener("submit", handleSaveDish);
     });
+
+    async function handleUploadImageFile(e) {
+      const file = e.target.files[0];
+      if (!file) return;
+      const formData = new FormData();
+      formData.append("file", file);
+      try {
+        const res = await http.post("/admin/upload-image", formData, {
+          headers: { "Content-Type": "multipart/form-data" }
+        });
+        if (res.data && res.data.image_url) {
+          document.getElementById("dish-form-img").value = res.data.image_url;
+          showToast("Đã tải ảnh lên thành công!", "success");
+        }
+      } catch (err) {
+        showToast("Lỗi upload ảnh: " + err.message, "error");
+      }
+    }
+
+    function addOptionBuilderRow(opt = null) {
+      const container = document.getElementById("dish-options-builder");
+      const row = document.createElement("div");
+      row.className = "opt-builder-row";
+      row.style.cssText = "display:grid; grid-template-columns: 100px 1fr 95px 80px 32px; gap:6px; align-items:center;";
+      const g = opt ? opt.option_group : "Topping";
+      const n = opt ? opt.option_name : "";
+      const p = opt ? opt.extra_price : 5000;
+      const req = opt ? opt.is_required : false;
+      row.innerHTML = `
+        <select class="form-control opt-group" style="padding:6px; font-size:0.8rem;">
+          <option value="Topping" ${g === 'Topping' ? 'selected' : ''}>Topping</option>
+          <option value="Size" ${g === 'Size' ? 'selected' : ''}>Size</option>
+        </select>
+        <input type="text" class="form-control opt-name" placeholder="Tên tuỳ chọn..." value="${escapeHtml(n)}" style="padding:6px; font-size:0.8rem;" required>
+        <input type="number" class="form-control opt-price" placeholder="Giá thêm" value="${p}" min="0" style="padding:6px; font-size:0.8rem;">
+        <label style="font-size:0.75rem; display:flex; align-items:center; gap:4px; cursor:pointer;">
+          <input type="checkbox" class="opt-req" ${req ? 'checked' : ''}> Bắt buộc
+        </label>
+        <button type="button" class="btn btn-danger" style="padding:4px 8px; font-size:0.75rem;" onclick="this.parentElement.remove()">×</button>
+      `;
+      container.appendChild(row);
+    }
 
     async function loadCategories() {
       try {
@@ -195,11 +268,13 @@
       const tbody = document.getElementById("admin-dishes-tbody");
       const search = document.getElementById("admin-dish-search").value.trim();
       const catId = document.getElementById("admin-dish-cat-filter").value;
+      const statusFilter = document.getElementById("admin-dish-status-filter").value;
 
       try {
         const params = { page: 1, page_size: 100 };
         if (search) params.search = search;
         if (catId) params.category_id = catId;
+        if (statusFilter) params.status = statusFilter;
 
         const res = await api.get("/admin/dishes", params);
         dishesList = res.items || [];
@@ -222,7 +297,9 @@
             </td>
             <td>
               <strong>${escapeHtml(dish.name)}</strong>
+              ${dish.is_featured ? '<span style="color:var(--accent-secondary); font-size:0.78rem;"> ⭐ Nổi bật</span>' : ''}
               ${!dish.is_active ? '<span style="color:#ef4444; font-size:0.75rem;"> [ĐANG ẨN]</span>' : ''}
+              <div style="font-size:0.75rem; color:var(--text-dim);">${(dish.options || []).length} tuỳ chọn</div>
             </td>
             <td><span class="badge-tag">${escapeHtml(dish.category_name || '-')}</span></td>
             <td style="color:var(--accent-secondary); font-weight:700;">${formatVND(dish.price)}</td>
@@ -242,9 +319,15 @@
                 ${dish.is_active ? '👁️ Đang hiện' : '🔒 Đã ẩn'}
               </button>
             </td>
-            <td>
+            <td style="display:flex; gap:6px; flex-wrap:wrap;">
+              <button class="btn btn-secondary" style="padding:4px 8px; font-size:0.78rem;" onclick="toggleFeatured(${dish.id}, ${!dish.is_featured})" title="Đánh dấu nổi bật">
+                ${dish.is_featured ? '⭐' : '☆'}
+              </button>
               <button class="btn btn-secondary" style="padding:4px 8px; font-size:0.8rem;" onclick="openEditModal(${dish.id})">
                 ✏️ Sửa
+              </button>
+              <button class="btn btn-danger" style="padding:4px 8px; font-size:0.8rem;" onclick="deleteOrHideDish(${dish.id})">
+                🗑️ Xoá
               </button>
             </td>
           </tr>
@@ -275,9 +358,32 @@
       }
     }
 
+    async function toggleFeatured(id, newFeatured) {
+      try {
+        await api.put(`/admin/dishes/${id}`, { is_featured: newFeatured });
+        showToast(newFeatured ? "Đã đánh dấu món nổi bật ⭐" : "Đã bỏ đánh dấu nổi bật", "success");
+        await loadDishes();
+      } catch (err) {
+        showToast("Lỗi: " + err.message, "error");
+      }
+    }
+
+    async function deleteOrHideDish(id) {
+      if (!confirm("Bạn muốn xoá món ăn này? (Nếu món đã từng có trong đơn hàng, hệ thống sẽ tự chuyển sang trạng thái Ẩn)")) return;
+      try {
+        const res = await api.delete(`/admin/dishes/${id}`);
+        showToast(res.message || "Đã xử lý xoá/ẩn món", "info");
+        await loadDishes();
+      } catch (err) {
+        showToast("Lỗi: " + err.message, "error");
+      }
+    }
+
     function openDishModal(dish = null) {
       const modal = document.getElementById("dish-modal");
       const title = document.getElementById("modal-dish-title");
+      const builder = document.getElementById("dish-options-builder");
+      builder.innerHTML = "";
 
       if (dish) {
         title.textContent = "Chỉnh Sửa Món Ăn";
@@ -289,12 +395,15 @@
         document.getElementById("dish-form-desc").value = dish.description || "";
         document.getElementById("dish-form-available").checked = dish.is_available;
         document.getElementById("dish-form-active").checked = dish.is_active;
+        document.getElementById("dish-form-featured").checked = !!dish.is_featured;
+        (dish.options || []).forEach(opt => addOptionBuilderRow(opt));
       } else {
         title.textContent = "Thêm Món Ăn Mới";
         document.getElementById("dish-form").reset();
         document.getElementById("dish-form-id").value = "";
         document.getElementById("dish-form-available").checked = true;
         document.getElementById("dish-form-active").checked = true;
+        document.getElementById("dish-form-featured").checked = false;
       }
       modal.classList.add("active");
     }
@@ -318,11 +427,30 @@
       const description = document.getElementById("dish-form-desc").value.trim();
       const is_available = document.getElementById("dish-form-available").checked;
       const is_active = document.getElementById("dish-form-active").checked;
+      const is_featured = document.getElementById("dish-form-featured").checked;
 
       if (!name || isNaN(price) || price <= 0 || isNaN(category_id)) {
         showToast("Vui lòng điền tên, danh mục và giá hợp lệ (> 0)", "warning");
         return;
       }
+
+      const options = [];
+      document.querySelectorAll("#dish-options-builder .opt-builder-row").forEach(row => {
+        const g = row.querySelector(".opt-group").value;
+        const n = row.querySelector(".opt-name").value.trim();
+        const p = parseInt(row.querySelector(".opt-price").value || "0");
+        const r = row.querySelector(".opt-req").checked;
+        if (n) {
+          options.push({
+            option_group: g,
+            option_name: n,
+            extra_price: isNaN(p) ? 0 : p,
+            is_required: r,
+            max_select: g === "Size" ? 1 : 3,
+            is_active: true,
+          });
+        }
+      });
 
       const payload = {
         name,
@@ -332,6 +460,8 @@
         description: description || null,
         is_available,
         is_active,
+        is_featured,
+        options,
       };
 
       try {
