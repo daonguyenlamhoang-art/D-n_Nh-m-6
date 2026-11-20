@@ -1042,6 +1042,8 @@ a {
   .hero-food-plate-glow { width: 300px; height: 300px; }
   .promo-combo-banner { padding: 24px; }
   .promo-combo-title { font-size: 1.6rem; }
+  .nav-links { gap: 8px; flex-wrap: wrap; justify-content: center; }
+  .nav-container { flex-wrap: wrap; }
 }
 
 /* ===============================================================
