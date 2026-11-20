@@ -33,6 +33,13 @@ class DishOptionOut(DishOptionBase):
         from_attributes = True
 
 
+class OptionGroupOut(BaseModel):
+    group_name: str
+    is_required: bool = False
+    max_select: int = 1
+    options: list[DishOptionOut] = []
+
+
 class DishBase(BaseModel):
     name: str = Field(..., min_length=1, max_length=150)
     category_id: int
@@ -75,6 +82,7 @@ class DishOut(DishBase):
     review_count: int = 0
     sold_count: int = 0
     options: list[DishOptionOut] = []
+    option_groups: list[OptionGroupOut] = []
 
     class Config:
         from_attributes = True

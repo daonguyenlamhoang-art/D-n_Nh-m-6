@@ -9,7 +9,7 @@ from app.models.category import Category
 from app.models.dish import Dish
 from app.models.order import Order, OrderItem
 from app.models.review import Review
-from app.schemas.dish import DishOut
+from app.schemas.dish import DishOptionOut, DishOut, OptionGroupOut
 
 router = APIRouter(prefix="/dishes", tags=["Dishes"])
 
@@ -46,6 +46,27 @@ def enrich_dishes_list(db: Session, dishes: list[Dish]) -> list[DishOut]:
         dto.avg_rating = avg_r
         dto.review_count = cnt_r
         dto.sold_count = sold_map.get(d.id, 0)
+
+        # Gom các tuỳ chọn theo nhóm option_group (Size, Topping...) - T3D2354
+        groups_dict: dict[str, OptionGroupOut] = {}
+        for opt in (d.options or []):
+            if not opt.is_active:
+                continue
+            g_name = opt.option_group or "Topping"
+            if g_name not in groups_dict:
+                groups_dict[g_name] = OptionGroupOut(
+                    group_name=g_name,
+                    is_required=bool(opt.is_required),
+                    max_select=int(opt.max_select or 1),
+                    options=[],
+                )
+            else:
+                if opt.is_required:
+                    groups_dict[g_name].is_required = True
+                groups_dict[g_name].max_select = max(groups_dict[g_name].max_select, int(opt.max_select or 1))
+            groups_dict[g_name].options.append(DishOptionOut.model_validate(opt))
+        dto.option_groups = list(groups_dict.values())
+
         result.append(dto)
     return result
 
@@ -135,14 +156,16 @@ def get_bestseller_dishes(limit: int = Query(6, ge=1, le=30), db: Session = Depe
     )[:limit]
 
 
-@router.get("", response_model=list[DishOut])
-def get_dishes(
-    search: Optional[str] = Query(None, max_length=100),
+def _filter_and_sort_dishes(
+    db: Session,
+    search: Optional[str] = None,
     category_id: Optional[int] = None,
-    ids: Optional[str] = Query(None, description="Danh sách ID cách nhau bởi dấu phẩy để kiểm tra lại giỏ hàng"),
-    db: Session = Depends(get_db),
-):
-    """Lấy danh sách món ăn công khai (bỏ món ẩn và danh mục ẩn)."""
+    min_price: Optional[int] = None,
+    max_price: Optional[int] = None,
+    available_only: bool = False,
+    sort_by: Optional[str] = None,
+    ids: Optional[str] = None,
+) -> list[DishOut]:
     query = (
         db.query(Dish)
         .join(Category, Dish.category_id == Category.id)
@@ -158,6 +181,15 @@ def get_dishes(
         if clean_search:
             query = query.filter(Dish.name.ilike(f"%{clean_search}%"))
 
+    if min_price is not None:
+        query = query.filter(Dish.price >= min_price)
+
+    if max_price is not None:
+        query = query.filter(Dish.price <= max_price)
+
+    if available_only:
+        query = query.filter(Dish.is_available == True, Dish.status != "OUT_OF_STOCK")
+
     if ids:
         try:
             id_list = [int(i.strip()) for i in ids.split(",") if i.strip()]
@@ -167,7 +199,82 @@ def get_dishes(
             pass
 
     dishes = query.order_by(Dish.id.asc()).all()
-    return enrich_dishes_list(db, dishes)
+    enriched = enrich_dishes_list(db, dishes)
+
+    if sort_by == "price_asc":
+        enriched.sort(key=lambda x: (x.price, x.id))
+    elif sort_by == "price_desc":
+        enriched.sort(key=lambda x: (-x.price, x.id))
+    elif sort_by == "bestseller":
+        enriched.sort(key=lambda x: (-x.sold_count, -(1 if x.is_featured else 0), x.id))
+    elif sort_by == "rating":
+        enriched.sort(key=lambda x: (-x.avg_rating, -x.review_count, x.id))
+    elif sort_by == "newest":
+        enriched.sort(key=lambda x: x.id, reverse=True)
+
+    return enriched
+
+
+@router.get("/search")
+def search_and_filter_dishes(
+    q: Optional[str] = Query(None, max_length=100, description="Từ khoá tìm theo tên món"),
+    search: Optional[str] = Query(None, max_length=100),
+    category_id: Optional[int] = None,
+    min_price: Optional[int] = Query(None, ge=0),
+    max_price: Optional[int] = Query(None, ge=0),
+    available_only: bool = Query(False),
+    sort_by: Optional[str] = Query(None, description="price_asc | price_desc | bestseller | rating | newest"),
+    page: int = Query(1, ge=1),
+    page_size: int = Query(9, ge=1, le=100),
+    db: Session = Depends(get_db),
+):
+    """API tìm kiếm, lọc theo danh mục/khoảng giá/còn bán, sắp xếp và phân trang (T3D2354)."""
+    kw = q if q is not None else search
+    items_all = _filter_and_sort_dishes(
+        db=db,
+        search=kw,
+        category_id=category_id,
+        min_price=min_price,
+        max_price=max_price,
+        available_only=available_only,
+        sort_by=sort_by,
+    )
+    total = len(items_all)
+    total_pages = max(1, (total + page_size - 1) // page_size)
+    start = (page - 1) * page_size
+    end = start + page_size
+
+    return {
+        "total": total,
+        "page": page,
+        "page_size": page_size,
+        "total_pages": total_pages,
+        "items": items_all[start:end],
+    }
+
+
+@router.get("", response_model=list[DishOut])
+def get_dishes(
+    search: Optional[str] = Query(None, max_length=100),
+    category_id: Optional[int] = None,
+    min_price: Optional[int] = Query(None, ge=0),
+    max_price: Optional[int] = Query(None, ge=0),
+    available_only: bool = Query(False),
+    sort_by: Optional[str] = Query(None),
+    ids: Optional[str] = Query(None, description="Danh sách ID cách nhau bởi dấu phẩy để kiểm tra lại giỏ hàng"),
+    db: Session = Depends(get_db),
+):
+    """Lấy danh sách món ăn công khai có hỗ trợ tìm kiếm, lọc và sắp xếp (T3D2354)."""
+    return _filter_and_sort_dishes(
+        db=db,
+        search=search,
+        category_id=category_id,
+        min_price=min_price,
+        max_price=max_price,
+        available_only=available_only,
+        sort_by=sort_by,
+        ids=ids,
+    )
 
 
 @router.get("/{dish_id}", response_model=DishOut)
