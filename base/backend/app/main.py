@@ -26,7 +26,7 @@ from sqlalchemy.exc import OperationalError
 from app import models  # noqa: F401 - import để SQLAlchemy biết các bảng
 from app.core.config import settings
 from app.db.session import Base, engine
-from app.routers import admin, cart, categories, dishes, health, items, orders, store, vouchers
+from app.routers import admin, cart, categories, dishes, health, items, orders, reviews, store, vouchers
 
 
 @asynccontextmanager
@@ -103,6 +103,7 @@ app.include_router(categories.router, prefix="/api")
 app.include_router(dishes.router, prefix="/api")
 app.include_router(cart.router, prefix="/api")
 app.include_router(vouchers.router, prefix="/api")
+app.include_router(reviews.router, prefix="/api")
 app.include_router(orders.router, prefix="/api")
 app.include_router(admin.router, prefix="/api")
 
