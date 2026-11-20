@@ -1043,3 +1043,167 @@ a {
   .promo-combo-banner { padding: 24px; }
   .promo-combo-title { font-size: 1.6rem; }
 }
+
+/* ===============================================================
+   T3D22F6 & Shared UI Components: Sticky Category Nav, Out-of-stock,
+   Favorite Heart, Mobile Cart Drawer, Search Suggestions, Chat Widget
+   =============================================================== */
+.sticky-category-nav {
+  position: sticky;
+  top: 64px;
+  z-index: 900;
+  background-color: rgba(11, 17, 32, 0.94);
+  backdrop-filter: blur(10px);
+  padding: 10px 0;
+  margin-bottom: 24px;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.dish-card.out-of-stock {
+  opacity: 0.58;
+  filter: grayscale(35%);
+}
+
+.dish-card.out-of-stock .dish-card-img-wrapper::after {
+  content: "TẠM HẾT MÓN";
+  position: absolute;
+  inset: 0;
+  background: rgba(11, 17, 32, 0.65);
+  color: #f87171;
+  font-weight: 800;
+  font-size: 1.05rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  letter-spacing: 1px;
+}
+
+.btn-fav-heart {
+  position: absolute;
+  top: 12px;
+  left: 12px;
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  background: rgba(15, 23, 42, 0.82);
+  border: 1px solid var(--border-color);
+  color: var(--text-muted);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  font-size: 1.05rem;
+  transition: var(--transition);
+  z-index: 3;
+}
+.btn-fav-heart:hover,
+.btn-fav-heart.active {
+  color: #ef4444;
+  border-color: rgba(239, 68, 68, 0.5);
+  transform: scale(1.1);
+}
+
+/* Search Autocomplete Suggestions */
+.search-suggestions {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  right: 0;
+  background-color: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.6);
+  z-index: 1200;
+  max-height: 320px;
+  overflow-y: auto;
+  display: none;
+}
+.search-suggestions.active { display: block; }
+.suggestion-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--border-subtle);
+  cursor: pointer;
+  transition: var(--transition);
+}
+.suggestion-item:hover { background-color: var(--bg-card-hover); }
+
+/* Mobile Cart Drawer */
+.cart-drawer-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.65);
+  z-index: 2100;
+  opacity: 0;
+  visibility: hidden;
+  transition: var(--transition);
+}
+.cart-drawer-overlay.active { opacity: 1; visibility: visible; }
+.cart-drawer {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: 100%;
+  max-width: 400px;
+  background-color: var(--bg-card);
+  border-left: 1px solid var(--border-color);
+  z-index: 2101;
+  transform: translateX(100%);
+  transition: var(--transition);
+  display: flex;
+  flex-direction: column;
+}
+.cart-drawer.active { transform: translateX(0); }
+
+/* Floating Customer Chat Widget */
+.chat-fab {
+  position: fixed;
+  bottom: 24px;
+  left: 24px;
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  background-color: var(--accent-primary);
+  color: #fff;
+  border: none;
+  box-shadow: 0 6px 20px rgba(249, 115, 22, 0.5);
+  font-size: 1.5rem;
+  cursor: pointer;
+  z-index: 1900;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: var(--transition);
+}
+.chat-fab:hover { transform: scale(1.08); }
+.chat-panel {
+  position: fixed;
+  bottom: 90px;
+  left: 24px;
+  width: 340px;
+  max-width: calc(100vw - 32px);
+  height: 440px;
+  background-color: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-lg);
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.65);
+  z-index: 1901;
+  display: none;
+  flex-direction: column;
+  overflow: hidden;
+}
+.chat-panel.active { display: flex; }
+
+@media print {
+  .navbar, .store-status-bar, .footer, .admin-sidebar, .admin-topbar, .no-print, .chat-fab, .chat-panel {
+    display: none !important;
+  }
+  body, .admin-main, .card-panel {
+    background: #fff !important;
+    color: #000 !important;
+    box-shadow: none !important;
+  }
+}

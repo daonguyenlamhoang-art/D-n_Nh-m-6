@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Wireframe & Design System Trang Khách | NightFood (T3D22F6)</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body data-root="./">
+  <header id="app-header"></header>
+
+  <main class="container" style="padding: 36px 16px 60px;">
+    <div class="section-header">
+      <div>
+        <span class="hero-tag">T3D22F6 · WIREFRAME & DESIGN SYSTEM</span>
+        <h1 class="section-title">🎨 Wireframe Trang Khách (Desktop & Mobile)</h1>
+        <p style="color:var(--text-muted);">Hệ thống màu sắc, nút bấm, card món ăn và bố cục 5 màn hình chính</p>
+      </div>
+    </div>
+
+    <!-- 1. Bảng màu & Nút chung -->
+    <section class="card-panel">
+      <h3 style="margin-bottom:14px;">1. Design Tokens (Màu sắc & Nút bấm)</h3>
+      <div style="display:flex; gap:14px; flex-wrap:wrap; margin-bottom:18px;">
+        <div style="padding:12px 18px; background:#0B1120; border:1px solid var(--border-color); border-radius:8px;">#0B1120 (Bg Main)</div>
+        <div style="padding:12px 18px; background:#1E293B; border:1px solid var(--border-color); border-radius:8px;">#1E293B (Bg Card)</div>
+        <div style="padding:12px 18px; background:#F97316; color:#fff; font-weight:700; border-radius:8px;">#F97316 (Primary Orange)</div>
+        <div style="padding:12px 18px; background:#FBBF24; color:#111; font-weight:700; border-radius:8px;">#FBBF24 (Secondary Gold)</div>
+      </div>
+      <div style="display:flex; gap:12px; flex-wrap:wrap;">
+        <button class="btn btn-primary">Nút Chính (Primary)</button>
+        <button class="btn btn-secondary">Nút Phụ (Secondary)</button>
+        <button class="btn btn-danger">Nút Huỷ / Xoá (Danger)</button>
+        <button class="btn-add-cart">+ Thêm vào giỏ</button>
+        <button class="btn-add-cart" disabled>Hết món</button>
+      </div>
+    </section>
+
+    <!-- 2. Wireframe 5 màn hình khách (Desktop & Mobile) -->
+    <div class="dish-grid-3">
+      <div class="card-panel">
+        <h4>① Trang Chủ & Menu Theo Danh Mục</h4>
+        <p style="color:var(--text-muted); font-size:0.88rem; margin:8px 0 14px;">Hero Banner, thanh danh mục dính trên cùng (Sticky Nav), lưới món ăn 3 cột (Desktop) / 1 cột (Mobile), card món hết hiện mờ.</p>
+        <a href="index.html" class="btn btn-secondary" style="width:100%;">Xem Trang Chủ →</a>
+      </div>
+      <div class="card-panel">
+        <h4>② Chi Tiết Món & Chọn Tuỳ Chọn</h4>
+        <p style="color:var(--text-muted); font-size:0.88rem; margin:8px 0 14px;">Ảnh lớn, mô tả, nhóm tuỳ chọn Size (bắt buộc) & Topping (chọn nhiều), ghi chú, số lượng, tự cập nhật giá.</p>
+        <a href="product-detail.html?id=1" class="btn btn-secondary" style="width:100%;">Xem Chi Tiết Món →</a>
+      </div>
+      <div class="card-panel">
+        <h4>③ Giỏ Hàng & Theo Dõi Đơn</h4>
+        <p style="color:var(--text-muted); font-size:0.88rem; margin:8px 0 14px;">Danh sách món kèm tuỳ chọn/ghi chú, ngăn kéo trượt trên mobile, thanh tiến trình trạng thái đơn hàng 5 bước.</p>
+        <div style="display:flex; gap:8px;">
+          <a href="cart.html" class="btn btn-secondary" style="flex:1;">Giỏ Hàng</a>
+          <a href="order-lookup.html" class="btn btn-secondary" style="flex:1;">Theo Dõi Đơn</a>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <footer id="app-footer"></footer>
+  <script src="https://cdn.jsdelivr.net/npm/axios@1.7.9/dist/axios.min.js"></script>
+  <script src="js/config.js"></script>
+  <script src="js/utils.js"></script>
+  <script src="js/api.js"></script>
+  <script src="js/cart-storage.js"></script>
+  <script src="js/layout.js"></script>
+</body>
+</html>
