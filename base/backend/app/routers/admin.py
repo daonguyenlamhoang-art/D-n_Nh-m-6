@@ -23,10 +23,11 @@ from app.models.category import Category
 from app.models.dish import Dish
 from app.models.order import Order, OrderStatusHistory
 from app.models.user import User
+from app.models.voucher import Voucher
 from app.schemas.admin import AdminLoginRequest, AdminUserOut, DashboardStatsOut
 from app.schemas.category import CategoryCreate, CategoryOut, CategoryReorderItem, CategoryUpdate
 from app.schemas.dish import DishCreate, DishOut, DishUpdate
-from app.schemas.order import OrderOut, OrderStatusUpdate
+from app.schemas.order import OrderCancelRequest, OrderOut, OrderStatusUpdate
 
 router = APIRouter(prefix="/admin", tags=["Admin"])
 
@@ -524,6 +525,68 @@ def admin_update_order_status(
     )
     db.add(history)
 
+    db.commit()
+    db.refresh(order)
+    return OrderOut.model_validate(order)
+
+
+@router.post("/orders/{order_id}/cancel", response_model=OrderOut)
+def admin_cancel_order_with_reason(
+    order_id: int,
+    cancel_in: OrderCancelRequest,
+    db: Session = Depends(get_db),
+    current_admin: User = Depends(get_current_admin),
+):
+    """Nhân viên/Admin huỷ đơn trước trạng thái 'Đang giao' (delivering) kèm lý do bắt buộc và ghi lịch sử (T3D2909)."""
+    order = (
+        db.query(Order)
+        .filter(Order.id == order_id)
+        .options(joinedload(Order.items), joinedload(Order.status_histories))
+        .first()
+    )
+    if not order:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail={"code": "ORDER_NOT_FOUND", "message": "Không tìm thấy đơn hàng", "details": {}},
+        )
+
+    reason = (cancel_in.reason or "").strip()
+    if not reason:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={
+                "code": "CANCEL_REASON_REQUIRED",
+                "message": "Nhân viên huỷ đơn bắt buộc phải nhập lý do (VD: Hết món, khách đổi ý...)",
+                "details": {},
+            },
+        )
+
+    if order.status not in ["pending", "confirmed", "preparing"]:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={
+                "code": "CANNOT_CANCEL_AT_STAGE",
+                "message": f"Không thể huỷ đơn khi đơn đã ở trạng thái '{order.status}'. Nhân viên chỉ được huỷ trước khi đơn chuyển sang 'Đang giao'.",
+                "details": {"current_status": order.status},
+            },
+        )
+
+    old_st = order.status
+    order.status = "cancelled"
+
+    if order.voucher_id:
+        voucher = db.query(Voucher).filter(Voucher.id == order.voucher_id).first()
+        if voucher and (voucher.used_count or 0) > 0:
+            voucher.used_count -= 1
+
+    history = OrderStatusHistory(
+        order_id=order.id,
+        changed_by=current_admin.id,
+        old_status=old_st,
+        new_status="cancelled",
+        note=f"Nhân viên huỷ đơn: {reason}",
+    )
+    db.add(history)
     db.commit()
     db.refresh(order)
     return OrderOut.model_validate(order)
