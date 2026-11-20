@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Tra Cứu Đơn Hàng | NightFood</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body data-root="./">
+  <header id="app-header"></header>
+
+  <main class="container" style="padding-top: 36px; padding-bottom: 60px;">
+    <div style="max-width: 760px; margin: 0 auto;">
+      <h1 class="section-title" style="margin-bottom: 12px; justify-content: center;">
+        🔍 Tra Cứu Tiến Độ Đơn Hàng
+      </h1>
+      <p style="color:var(--text-muted); text-align: center; margin-bottom: 28px;">
+        Nhập chính xác <strong>Mã đơn hàng</strong> và <strong>Số điện thoại</strong> đặt hàng để theo dõi món ăn của bạn (FR-07)
+      </p>
+
+      <!-- Form tra cứu -->
+      <div class="card-panel" style="margin-bottom: 28px;">
+        <form id="lookup-form">
+          <div style="display:grid; grid-template-columns: 1fr 1fr; gap:16px;">
+            <div class="form-group">
+              <label class="form-label">Mã đơn hàng <span class="req">*</span></label>
+              <input type="text" id="lookup-code" class="form-control" placeholder="Ví dụ: NF123456" maxlength="30" required style="text-transform:uppercase;">
+            </div>
+
+            <div class="form-group">
+              <label class="form-label">Số điện thoại nhận hàng <span class="req">*</span></label>
+              <input type="tel" id="lookup-phone" class="form-control" placeholder="Ví dụ: 0912345678" maxlength="10" required>
+            </div>
+          </div>
+
+          <button type="submit" id="btn-lookup-submit" class="btn btn-primary" style="width:100%; padding:12px; font-size:1rem; margin-top:8px;">
+            🔍 Tra Cứu Ngay
+          </button>
+        </form>
+      </div>
+
+      <!-- Khu vực hiển thị kết quả -->
+      <div id="lookup-result-container"></div>
+    </div>
+  </main>
+
+  <footer id="app-footer"></footer>
+
+  <!-- Scripts -->
+  <script src="https://cdn.jsdelivr.net/npm/axios@1.7.9/dist/axios.min.js"></script>
+  <script src="js/config.js"></script>
+  <script src="js/utils.js"></script>
+  <script src="js/api.js"></script>
+  <script src="js/cart-storage.js"></script>
+  <script src="js/layout.js"></script>
+  <script src="js/pages/lookup.js"></script>
+</body>
+</html>

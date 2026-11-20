@@ -1,0 +1,225 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Quản Lý Danh Mục | NightFood Admin</title>
+  <link rel="stylesheet" href="../css/style.css">
+  <link rel="stylesheet" href="../css/admin.css">
+</head>
+<body data-root="../">
+  <div class="admin-layout">
+    <!-- Sidebar -->
+    <aside class="admin-sidebar">
+      <div class="admin-sidebar-header">
+        <a href="dashboard.html" class="brand-logo">
+          <span class="logo-icon">🌙</span>
+          <span>Night<span class="highlight">Food</span></span>
+        </a>
+        <div style="color:var(--text-dim); font-size:0.78rem; margin-top:4px;">BẢNG QUẢN TRỊ</div>
+      </div>
+
+      <ul class="admin-menu">
+        <li><a href="dashboard.html">📊 Tổng Quan (Dashboard)</a></li>
+        <li><a href="orders.html">📦 Quản Lý Đơn Hàng</a></li>
+        <li><a href="dishes.html">🍜 Quản Lý Thực Đơn</a></li>
+        <li><a href="categories.html" class="active">📑 Quản Lý Danh Mục</a></li>
+        <li><a href="../index.html" target="_blank">🌐 Xem Trang Khách Hàng ↗</a></li>
+      </ul>
+
+      <div style="padding: 16px 20px; border-top:1px solid var(--border-color);">
+        <button id="btn-admin-logout" class="btn btn-secondary" style="width:100%; font-size:0.85rem; padding:8px;">
+          🚪 Đăng Xuất
+        </button>
+      </div>
+    </aside>
+
+    <!-- Main -->
+    <main class="admin-main">
+      <div class="admin-topbar">
+        <div>
+          <h1 style="font-size:1.6rem; font-weight:800; color:var(--text-main);">Quản Lý Danh Mục (FR-10)</h1>
+          <p style="color:var(--text-muted); font-size:0.88rem;">Nhóm các món ăn. Khi ẩn danh mục, các món thuộc danh mục cũng sẽ ẩn theo (BR-16)</p>
+        </div>
+
+        <div>
+          <button id="btn-open-add-cat" class="btn btn-primary" style="padding:8px 16px; font-size:0.9rem;">
+            + Thêm Danh Mục
+          </button>
+        </div>
+      </div>
+
+      <!-- Bảng danh mục -->
+      <div class="card-panel">
+        <div class="table-responsive">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>ID</th>
+                <th>Tên danh mục</th>
+                <th>Trạng thái hoạt động</th>
+                <th>Thao tác</th>
+              </tr>
+            </thead>
+            <tbody id="admin-cat-tbody">
+              <tr>
+                <td colspan="4" style="text-align:center; padding:30px; color:var(--text-dim);">Đang tải danh mục...</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <!-- Modal Thêm / Sửa danh mục -->
+  <div id="cat-modal" class="modal-overlay">
+    <div class="modal-card" style="max-width:420px;">
+      <div class="modal-header">
+        <h3 id="modal-cat-title">Thêm Danh Mục Mới</h3>
+        <button class="modal-close-btn" id="modal-cat-close">&times;</button>
+      </div>
+      <form id="cat-form">
+        <input type="hidden" id="cat-form-id">
+        <div class="modal-body">
+          <div class="form-group">
+            <label class="form-label">Tên danh mục <span class="req">*</span></label>
+            <input type="text" id="cat-form-name" class="form-control" placeholder="Ví dụ: Đồ Chiên & Ăn Vặt" maxlength="100" required>
+          </div>
+
+          <label style="display:flex; align-items:center; gap:8px; cursor:pointer;">
+            <input type="checkbox" id="cat-form-active" checked>
+            <span>Kích hoạt (Hiển thị các món thuộc nhóm)</span>
+          </label>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" id="modal-cat-cancel">Hủy</button>
+          <button type="submit" class="btn btn-primary">Lưu Danh Mục</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/axios@1.7.9/dist/axios.min.js"></script>
+  <script src="../js/config.js"></script>
+  <script src="../js/utils.js"></script>
+  <script src="../js/api.js"></script>
+  <script src="../js/pages/admin.js"></script>
+  <script>
+    let categoriesList = [];
+
+    document.addEventListener("DOMContentLoaded", async () => {
+      const user = await checkAdminAuth();
+      if (!user) return;
+
+      document.getElementById("btn-admin-logout").addEventListener("click", handleAdminLogout);
+      await loadCategories();
+
+      document.getElementById("btn-open-add-cat").addEventListener("click", () => openCatModal());
+      document.getElementById("modal-cat-close").addEventListener("click", closeCatModal);
+      document.getElementById("modal-cat-cancel").addEventListener("click", closeCatModal);
+      document.getElementById("cat-form").addEventListener("submit", handleSaveCategory);
+    });
+
+    async function loadCategories() {
+      const tbody = document.getElementById("admin-cat-tbody");
+      try {
+        categoriesList = await api.get("/admin/categories");
+        if (categoriesList.length === 0) {
+          tbody.innerHTML = `<tr><td colspan="4" style="text-align:center; padding:30px; color:var(--text-dim);">Chưa có danh mục nào.</td></tr>`;
+          return;
+        }
+
+        tbody.innerHTML = categoriesList.map(cat => `
+          <tr style="${!cat.is_active ? 'opacity:0.55;' : ''}">
+            <td>${cat.id}</td>
+            <td>
+              <strong style="color:var(--text-main); font-size:1rem;">${escapeHtml(cat.name)}</strong>
+              ${!cat.is_active ? '<span style="color:#ef4444; font-size:0.8rem;"> [ĐANG ẨN]</span>' : ''}
+            </td>
+            <td>
+              <button 
+                class="btn ${cat.is_active ? 'btn-secondary' : 'btn-danger'}" 
+                style="padding:3px 8px; font-size:0.78rem;" 
+                onclick="toggleCatActive(${cat.id}, ${!cat.is_active})">
+                ${cat.is_active ? '👁️ Đang kích hoạt' : '🔒 Đang ẩn'}
+              </button>
+            </td>
+            <td>
+              <button class="btn btn-secondary" style="padding:4px 8px; font-size:0.8rem;" onclick="openEditCatModal(${cat.id})">
+                ✏️ Sửa tên
+              </button>
+            </td>
+          </tr>
+        `).join("");
+
+      } catch (err) {
+        tbody.innerHTML = `<tr><td colspan="4" style="color:var(--danger); text-align:center; padding:20px;">Lỗi: ${escapeHtml(err.message)}</td></tr>`;
+      }
+    }
+
+    async function toggleCatActive(id, newStatus) {
+      try {
+        await api.put(`/admin/categories/${id}`, { is_active: newStatus });
+        showToast(newStatus ? "Đã kích hoạt danh mục" : "Đã ẩn danh mục", "info");
+        await loadCategories();
+      } catch (err) {
+        showToast("Lỗi: " + err.message, "error");
+      }
+    }
+
+    function openCatModal(cat = null) {
+      const modal = document.getElementById("cat-modal");
+      const title = document.getElementById("modal-cat-title");
+
+      if (cat) {
+        title.textContent = "Chỉnh Sửa Danh Mục";
+        document.getElementById("cat-form-id").value = cat.id;
+        document.getElementById("cat-form-name").value = cat.name;
+        document.getElementById("cat-form-active").checked = cat.is_active;
+      } else {
+        title.textContent = "Thêm Danh Mục Mới";
+        document.getElementById("cat-form").reset();
+        document.getElementById("cat-form-id").value = "";
+        document.getElementById("cat-form-active").checked = true;
+      }
+      modal.classList.add("active");
+    }
+
+    function openEditCatModal(catId) {
+      const cat = categoriesList.find(c => c.id === catId);
+      if (cat) openCatModal(cat);
+    }
+
+    function closeCatModal() {
+      document.getElementById("cat-modal").classList.remove("active");
+    }
+
+    async function handleSaveCategory(e) {
+      e.preventDefault();
+      const id = document.getElementById("cat-form-id").value;
+      const name = document.getElementById("cat-form-name").value.trim();
+      const is_active = document.getElementById("cat-form-active").checked;
+
+      if (!name) {
+        showToast("Vui lòng nhập tên danh mục", "warning");
+        return;
+      }
+
+      try {
+        if (id) {
+          await api.put(`/admin/categories/${id}`, { name, is_active });
+          showToast("Cập nhật danh mục thành công!", "success");
+        } else {
+          await api.post("/admin/categories", { name, is_active });
+          showToast("Thêm danh mục mới thành công!", "success");
+        }
+        closeCatModal();
+        await loadCategories();
+      } catch (err) {
+        showToast("Lỗi lưu danh mục: " + err.message, "error");
+      }
+    }
+  </script>
+</body>
+</html>

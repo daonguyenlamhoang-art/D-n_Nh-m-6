@@ -1,0 +1,231 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>NightFood - Quán Bán Đồ Ăn Đêm Nóng Hổi Trực Tuyến</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body data-root="./">
+  <header id="app-header"></header>
+
+  <main>
+    <!-- 1. Hero Section chuẩn Figma Frame 1 -->
+    <section class="hero-figma">
+      <div class="container hero-grid">
+        <div>
+          <div class="hero-tag">
+            <span>🔥</span>
+            <span>QUÁN ĂN ĐÊM HÀ NỘI · MỞ CỬA 18:00 - 02:00</span>
+          </div>
+          <h1 class="hero-title">
+            Đồ Ăn Đêm Nóng Hổi, <br>
+            <span class="highlight">Giao Nhanh Tận Nơi</span> 🌙
+          </h1>
+          <p class="hero-desc">
+            Cứu đói mọi cú đêm và dân cày deadline với hơn 20 món ăn đêm đậm đà: mì trộn xúc xích, cơm gà sốt cay, cháo sườn sụn, chân gà sả tắc và combo cú đêm siêu tiết kiệm. Giao nhanh 20-30 phút!
+          </p>
+          <div class="hero-actions">
+            <a href="dishes.html" class="btn btn-primary" style="font-size:1.05rem; padding:12px 28px;">
+              🍜 Xem Thực Đơn Đêm
+            </a>
+            <a href="order-lookup.html" class="btn btn-secondary" style="font-size:1.05rem; padding:12px 24px;">
+              🔍 Tra Cứu Đơn Hàng
+            </a>
+          </div>
+          <div class="hero-stats-row">
+            <div>⭐ <strong>4.9/5</strong> Đánh giá cú đêm</div>
+            <div>🛵 <strong>20-30 phút</strong> Giao tận giường</div>
+            <div>💵 <strong>COD</strong> Tiền mặt khi nhận</div>
+          </div>
+        </div>
+
+        <!-- Đĩa mì trộn tròn có hào quang vàng theo đúng Figma -->
+        <div class="hero-food-plate-wrap">
+          <div class="hero-food-plate-glow"></div>
+          <div class="hero-food-plate">
+            <img src="https://images.unsplash.com/photo-1569718212165-3a8278d5f624?w=800&auto=format&fit=crop&q=80" alt="Mì Trộn Xúc Xích Trứng Lòng Đào">
+          </div>
+          <div class="hero-floating-pill">
+            <span style="font-size:1.8rem;">🍜</span>
+            <div>
+              <div style="font-weight:700; color:var(--text-main); font-size:0.92rem;">Mì Trộn Xúc Xích Lòng Đào</div>
+              <div style="color:var(--accent-secondary); font-weight:800; font-size:0.88rem;">35.000đ · Bán chạy đêm nay</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 2. 3 Khung Cam Kết / USP chuẩn Figma Frame 1 -->
+    <section class="container">
+      <div class="usp-grid">
+        <div class="usp-card">
+          <div class="usp-icon">🛵</div>
+          <div class="usp-text">
+            <h4>Giao Siêu Tốc 20-30p</h4>
+            <p>Đội ngũ shipper đêm luôn túc trực mọi tuyến đường</p>
+          </div>
+        </div>
+        <div class="usp-card">
+          <div class="usp-icon">🔥</div>
+          <div class="usp-text">
+            <h4>Đồ Ăn Nóng Sốt 100%</h4>
+            <p>Chế biến khi nhận đơn, đóng hộp giữ nhiệt chuyên dụng</p>
+          </div>
+        </div>
+        <div class="usp-card">
+          <div class="usp-icon">💵</div>
+          <div class="usp-text">
+            <h4>Thanh Toán Tiền Mặt COD</h4>
+            <p>Kiểm tra đồ ăn ưng ý mới thanh toán tiền mặt cho shipper</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 3. Section: Món Ăn Bán Chạy Nhất (3 cột chuẩn Figma Frame 1) -->
+    <section class="container" style="margin-bottom: 40px;">
+      <div class="section-header">
+        <h2 class="section-title">
+          <span>🔥 Món Bán Chạy Nhất Đêm Nay</span>
+          <span class="badge-tag">Hot Nhất</span>
+        </h2>
+        <a href="dishes.html" class="btn btn-secondary" style="font-size:0.88rem; padding:6px 14px;">Xem tất cả món →</a>
+      </div>
+
+      <!-- Danh sách món nổi bật (3 cột) -->
+      <div id="featured-dishes-grid" class="dish-grid-3">
+        <div style="grid-column: 1 / -1; text-align:center; padding: 40px; color:var(--text-dim);">
+          Đang tải thực đơn đêm...
+        </div>
+      </div>
+    </section>
+
+    <!-- 4. Section: Promo Combo Cú Đêm (Banner rộng chuẩn Figma) -->
+    <section class="container">
+      <div class="promo-combo-banner">
+        <div>
+          <span class="promo-combo-badge">COMBO ĐẶC BIỆT DÀNH CHO CÚ ĐÊM</span>
+          <h2 class="promo-combo-title">Combo Cú Đêm Vui Vẻ - Tiết Kiệm 20%</h2>
+          <p class="promo-combo-desc">
+            Bao gồm: 01 Gà viên chiên giòn sốt cay ngọt + 01 Khoai tây chiên lắc phô mai béo ngậy + 01 Pepsi mát lạnh sảng khoái. Nạp năng lượng tức thì để cày deadline xuyên đêm!
+          </p>
+          <div class="promo-combo-price-row">
+            <span class="promo-combo-price">65.000đ</span>
+            <span class="promo-combo-old-price">80.000đ</span>
+          </div>
+          <a href="product-detail.html?id=14" class="btn btn-primary" style="padding:12px 28px; font-size:1.05rem;">
+            👉 Đặt Combo Ngay
+          </a>
+        </div>
+        <div class="promo-combo-img-wrap">
+          <img src="https://images.unsplash.com/photo-1625813506062-0aeb1d7a094b?w=600&auto=format&fit=crop&q=80" alt="Combo Cú Đêm">
+        </div>
+      </div>
+    </section>
+
+    <!-- 5. Section: Combo Ăn Đêm Siêu Hời (3 cột chuẩn Figma Frame 1) -->
+    <section class="container" style="margin-bottom: 50px;">
+      <div class="section-header">
+        <h2 class="section-title">
+          <span>🌙 Combo Ăn Đêm Tiết Kiệm</span>
+          <span class="badge-tag">Cực Hời</span>
+        </h2>
+        <a href="dishes.html" class="btn btn-secondary" style="font-size:0.88rem; padding:6px 14px;">Xem thêm combo →</a>
+      </div>
+      <div id="combo-dishes-grid" class="dish-grid-3">
+        <!-- Render combo động -->
+      </div>
+    </section>
+
+    <!-- 6. Section: Cam Kết & Quy Trình Chế Biến Nóng Hổi (Chuẩn Figma) -->
+    <section class="container" style="margin-bottom: 50px;">
+      <div class="story-section">
+        <div class="story-img-wrap">
+          <img src="https://images.unsplash.com/photo-1555396273-367ea4eb4db5?w=800&auto=format&fit=crop&q=80" alt="Bếp chế biến đêm">
+        </div>
+        <div>
+          <span class="hero-tag" style="margin-bottom:12px;">CHẤT LƯỢNG HÀNG ĐẦU</span>
+          <h2 style="font-size:2.2rem; font-weight:800; color:var(--text-main); margin-bottom:14px; line-height:1.25;">
+            Chế Biến Nóng Hổi Từng Món <br>Ngay Sau Khi Nhận Đơn
+          </h2>
+          <p style="color:var(--text-muted); font-size:1rem; line-height:1.6; margin-bottom:16px;">
+            NightFood không làm sẵn đồ ăn nguội ngắt để giao khách. Mỗi tô mì trộn, đĩa cơm gà giòn rụm hay bát cháo sườn đều được đầu bếp bắt đầu xào nấu ngay khi đơn hàng kích hoạt.
+          </p>
+          <ul class="story-check-list">
+            <li class="story-check-item">
+              <span class="icon">✓</span>
+              <span>100% nguyên liệu tươi mới nhập trong ngày, nói không với thực phẩm cũ</span>
+            </li>
+            <li class="story-check-item">
+              <span class="icon">✓</span>
+              <span>Hộp đựng thực phẩm giấy kraft giữ nhiệt an toàn tuyệt đối cho sức khỏe</span>
+            </li>
+            <li class="story-check-item">
+              <span class="icon">✓</span>
+              <span>Cam kết đổi mới hoặc hoàn tiền 100% nếu món ăn bị nguội hoặc sai món</span>
+            </li>
+          </ul>
+        </div>
+      </div>
+    </section>
+
+    <!-- 7. Section: Đánh Giá Khách Hàng (Chuẩn Figma Frame 1) -->
+    <section class="container">
+      <div class="section-header" style="justify-content:center; text-align:center;">
+        <h2 class="section-title">
+          <span>💬 Cú Đêm Nói Gì Về NightFood?</span>
+        </h2>
+      </div>
+      <div class="reviews-grid">
+        <div class="review-card">
+          <div class="review-stars">⭐⭐⭐⭐⭐</div>
+          <p class="review-comment">"Cày deadline đến 1h sáng đói run tay, đặt thử Combo Cú Đêm 20 phút sau có ngay đồ ăn nóng hổi. Gà rán rất giòn, mì trộn vừa miệng!"</p>
+          <div class="review-author">- Hoàng Nam (Lập trình viên)</div>
+        </div>
+        <div class="review-card">
+          <div class="review-stars">⭐⭐⭐⭐⭐</div>
+          <p class="review-comment">"Chân gà sả tắc rút xương giòn sần sật, nước chấm cay tê tái kèm ly trà đào cam sả cực đã. Đêm nào xem đá bóng cũng đặt ở đây."</p>
+          <div class="review-author">- Minh Quân (Cầu Giấy, Hà Nội)</div>
+        </div>
+        <div class="review-card">
+          <div class="review-stars">⭐⭐⭐⭐⭐</div>
+          <p class="review-comment">"Cháo sườn sụn đêm ở đây đỉnh thật sự, gạo sánh mịn ngọt xương. Mua lúc 12h đêm mùa lạnh ăn ấm cả người."</p>
+          <div class="review-author">- Thùy Trang (Sinh viên ĐHQG)</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 8. Section: Banner Đặt Món Cuối Trang (Chuẩn Figma) -->
+    <section class="container">
+      <div class="bottom-cta-banner">
+        <div>
+          <h3 style="font-size:1.6rem; font-weight:800; color:var(--text-main); margin-bottom:6px;">
+            Đói Bụng Lúc Nửa Đêm? Đặt Món Ngay!
+          </h3>
+          <p style="color:var(--text-muted); font-size:0.95rem;">
+            Phục vụ xuyên đêm từ 18:00 đến 02:00 sáng. Hotline cứu đói cấp tốc: <strong>0988.888.999</strong>
+          </p>
+        </div>
+        <div>
+          <a href="dishes.html" class="btn btn-primary" style="padding:12px 28px; font-size:1.05rem; white-space:nowrap;">
+            🍜 Xem Thực Đơn & Đặt Món
+          </a>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer id="app-footer"></footer>
+
+  <!-- Scripts -->
+  <script src="https://cdn.jsdelivr.net/npm/axios@1.7.9/dist/axios.min.js"></script>
+  <script src="js/config.js"></script>
+  <script src="js/utils.js"></script>
+  <script src="js/api.js"></script>
+  <script src="js/cart-storage.js"></script>
+  <script src="js/layout.js"></script>
+  <script src="js/pages/home.js"></script>
+</body>
+</html>

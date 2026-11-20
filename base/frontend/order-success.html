@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Đặt Hàng Thành Công | NightFood</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body data-root="./">
+  <header id="app-header"></header>
+
+  <main class="container" style="padding-top: 48px; padding-bottom: 70px;">
+    <div class="card-panel" style="max-width: 600px; margin: 0 auto; text-align: center; padding: 40px 30px;">
+      <div style="font-size: 4rem; margin-bottom: 16px;">🎉</div>
+      <h1 style="font-size: 1.8rem; font-weight: 800; color: #4ade80; margin-bottom: 12px;">
+        Đặt Hàng Thành Công!
+      </h1>
+      <p style="color: var(--text-muted); font-size: 1rem; margin-bottom: 24px;">
+        Cảm ơn <strong id="success-cust-name" style="color:var(--text-main);">bạn</strong> đã đặt món tại NightFood. Quán đang chuẩn bị món ăn nóng sốt và sẽ giao ngay cho bạn.
+      </p>
+
+      <div style="background-color: var(--bg-main); border: 1px dashed var(--accent-primary); border-radius: var(--radius-md); padding: 20px; margin-bottom: 28px;">
+        <div style="color: var(--text-dim); font-size: 0.88rem; text-transform: uppercase; margin-bottom: 6px;">
+          Mã Đơn Hàng Của Bạn
+        </div>
+        <div id="success-order-code" style="font-size: 2.2rem; font-weight: 800; color: var(--accent-secondary); letter-spacing: 2px;">
+          NF------
+        </div>
+        <div style="color: var(--text-dim); font-size: 0.82rem; margin-top: 6px;">
+          (Hãy lưu lại mã đơn và số điện thoại để tra cứu tiến độ đơn hàng)
+        </div>
+      </div>
+
+      <div style="background-color: var(--bg-main); border-radius: var(--radius-md); padding: 16px; margin-bottom: 28px; text-align: left; font-size: 0.95rem;">
+        <div style="display:flex; justify-content:space-between; margin-bottom:8px;">
+          <span style="color:var(--text-muted);">Số tiền thanh toán (COD):</span>
+          <strong id="success-total" style="color:var(--accent-secondary);">0đ</strong>
+        </div>
+        <div style="display:flex; justify-content:space-between;">
+          <span style="color:var(--text-muted);">Hình thức:</span>
+          <span style="color:#4ade80; font-weight:600;">Thanh toán khi nhận đồ ăn</span>
+        </div>
+      </div>
+
+      <div style="display:flex; gap:14px; justify-content:center; flex-wrap:wrap;">
+        <a id="btn-lookup-order" href="order-lookup.html" class="btn btn-primary" style="padding:12px 24px;">
+          🔍 Tra Cứu Đơn Hàng Này
+        </a>
+        <a href="index.html" class="btn btn-secondary" style="padding:12px 24px;">
+          🏠 Về Trang Chủ
+        </a>
+      </div>
+    </div>
+  </main>
+
+  <footer id="app-footer"></footer>
+
+  <!-- Scripts -->
+  <script src="https://cdn.jsdelivr.net/npm/axios@1.7.9/dist/axios.min.js"></script>
+  <script src="js/config.js"></script>
+  <script src="js/utils.js"></script>
+  <script src="js/api.js"></script>
+  <script src="js/cart-storage.js"></script>
+  <script src="js/layout.js"></script>
+  <script>
+    document.addEventListener("DOMContentLoaded", () => {
+      const params = new URLSearchParams(window.location.search);
+      const code = params.get("code") || "NF000000";
+      const total = params.get("total") || "0";
+      const name = params.get("name") || "Quý khách";
+      const phone = params.get("phone") || "";
+
+      document.getElementById("success-order-code").textContent = code;
+      document.getElementById("success-cust-name").textContent = name;
+      document.getElementById("success-total").textContent = formatVND(total);
+
+      const lookupBtn = document.getElementById("btn-lookup-order");
+      if (lookupBtn && phone) {
+        lookupBtn.href = `order-lookup.html?code=${encodeURIComponent(code)}&phone=${encodeURIComponent(phone)}`;
+      }
+    });
+  </script>
+</body>
+</html>

@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Chi Tiết Món Ăn | NightFood</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body data-root="./">
+  <header id="app-header"></header>
+
+  <main class="container" style="padding-top: 36px; padding-bottom: 60px;">
+    <div style="margin-bottom: 20px;">
+      <a href="dishes.html" class="btn btn-secondary" style="font-size:0.88rem; padding:6px 14px;">
+        ← Quay lại Thực đơn
+      </a>
+    </div>
+
+    <div id="dish-detail-container" class="card-panel" style="padding: 32px;">
+      <div style="text-align:center; padding: 60px; color:var(--text-dim);">
+        Đang tải thông tin món ăn...
+      </div>
+    </div>
+  </main>
+
+  <footer id="app-footer"></footer>
+
+  <!-- Scripts -->
+  <script src="https://cdn.jsdelivr.net/npm/axios@1.7.9/dist/axios.min.js"></script>
+  <script src="js/config.js"></script>
+  <script src="js/utils.js"></script>
+  <script src="js/api.js"></script>
+  <script src="js/cart-storage.js"></script>
+  <script src="js/layout.js"></script>
+  <script src="js/pages/product-detail.js"></script>
+</body>
+</html>

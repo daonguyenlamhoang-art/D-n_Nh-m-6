@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Đăng Nhập Quản Trị Viên | NightFood</title>
+  <link rel="stylesheet" href="../css/style.css">
+  <link rel="stylesheet" href="../css/admin.css">
+</head>
+<body>
+  <div class="login-wrapper">
+    <div class="login-card">
+      <div class="login-header">
+        <div style="font-size:3rem; margin-bottom:8px;">🌙</div>
+        <h2>Đăng Nhập Quản Trị</h2>
+        <p style="color:var(--text-muted); font-size:0.9rem; margin-top:4px;">
+          Hệ thống quản lý quán bán đồ ăn đêm NightFood
+        </p>
+      </div>
+
+      <div id="login-alert" style="display:none; padding:12px; border-radius:var(--radius-sm); margin-bottom:18px; font-size:0.88rem;"></div>
+
+      <form id="admin-login-form">
+        <div class="form-group">
+          <label class="form-label">Tên đăng nhập <span class="req">*</span></label>
+          <input type="text" id="admin-username" class="form-control" placeholder="Nhập username admin" required autofocus>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">Mật khẩu <span class="req">*</span></label>
+          <input type="password" id="admin-password" class="form-control" placeholder="Nhập mật khẩu" required>
+        </div>
+
+        <button type="submit" id="btn-login" class="btn btn-primary" style="width:100%; padding:12px; font-size:1rem; margin-top:8px;">
+          🔒 Đăng Nhập
+        </button>
+      </form>
+
+      <div style="text-align:center; margin-top:24px;">
+        <a href="../index.html" style="font-size:0.88rem; color:var(--text-dim);">← Về trang khách hàng</a>
+      </div>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/axios@1.7.9/dist/axios.min.js"></script>
+  <script src="../js/config.js"></script>
+  <script src="../js/utils.js"></script>
+  <script src="../js/api.js"></script>
+  <script>
+    document.addEventListener("DOMContentLoaded", () => {
+      const form = document.getElementById("admin-login-form");
+      const alertBox = document.getElementById("login-alert");
+      const submitBtn = document.getElementById("btn-login");
+
+      form.addEventListener("submit", async (e) => {
+        e.preventDefault();
+        alertBox.style.display = "none";
+
+        const username = document.getElementById("admin-username").value.trim();
+        const password = document.getElementById("admin-password").value;
+
+        if (!username || !password) {
+          showAlert("Vui lòng điền đầy đủ tên đăng nhập và mật khẩu", "danger");
+          return;
+        }
+
+        try {
+          submitBtn.disabled = true;
+          submitBtn.textContent = "Đang xác thực...";
+
+          const res = await api.post("/admin/login", { username, password });
+
+          // Lưu token và thông tin user
+          if (res.token) {
+            localStorage.setItem("nightfood_admin_token", res.token);
+          }
+          if (res.user) {
+            localStorage.setItem("nightfood_admin_user", JSON.stringify(res.user));
+          }
+
+          showAlert("Đăng nhập thành công! Đang chuyển hướng...", "success");
+          setTimeout(() => {
+            window.location.href = "dashboard.html";
+          }, 600);
+
+        } catch (err) {
+          submitBtn.disabled = false;
+          submitBtn.textContent = "🔒 Đăng Nhập";
+
+          if (err.status === 429) {
+            showAlert(`⛔ ${err.message}`, "danger");
+          } else {
+            showAlert(err.message || "Sai tên đăng nhập hoặc mật khẩu", "danger");
+          }
+        }
+      });
+
+      function showAlert(msg, type) {
+        alertBox.textContent = msg;
+        alertBox.style.display = "block";
+        if (type === "success") {
+          alertBox.style.backgroundColor = "rgba(34, 197, 94, 0.2)";
+          alertBox.style.color = "#4ade80";
+          alertBox.style.border = "1px solid rgba(34, 197, 94, 0.4)";
+        } else {
+          alertBox.style.backgroundColor = "rgba(239, 68, 68, 0.2)";
+          alertBox.style.color = "#f87171";
+          alertBox.style.border = "1px solid rgba(239, 68, 68, 0.4)";
+        }
+      }
+    });
+  </script>
+</body>
+</html>

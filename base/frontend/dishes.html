@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Thực Đơn Đêm Nóng Hổi | NightFood</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body data-root="./">
+  <header id="app-header"></header>
+
+  <main class="container" style="padding-top: 36px; padding-bottom: 60px;">
+    <!-- Tiêu đề & Ô tìm kiếm chuẩn Figma Frame 2 -->
+    <div class="section-header" style="align-items: flex-end;">
+      <div>
+        <span class="hero-tag" style="margin-bottom:8px;">HƠN 20 MÓN ĐÊM ĐẬM ĐÀ</span>
+        <h1 class="section-title">🍜 Thực Đơn Đêm Nóng Hổi</h1>
+        <p style="color:var(--text-muted); font-size:0.95rem; margin-top:4px;">
+          Lựa chọn các món ăn thơm ngon, combo cứu đói và đồ uống mát lạnh đêm nay
+        </p>
+      </div>
+
+      <!-- Ô tìm kiếm (FR-03) -->
+      <div class="search-box">
+        <span class="search-icon">🔍</span>
+        <input 
+          type="text" 
+          id="search-input" 
+          class="search-input" 
+          placeholder="Tìm tên món (mì trộn, gà sốt, khoai...)" 
+          maxlength="100">
+      </div>
+    </div>
+
+    <!-- Thanh lọc danh mục (FR-03, TC-04) -->
+    <div id="category-tabs-container" class="category-tabs">
+      <button class="category-tab active" data-category-id="">Tất cả món</button>
+    </div>
+
+    <!-- Lưới hiển thị món ăn 3 cột chuẩn Figma Frame 2 -->
+    <div id="dishes-grid" class="dish-grid-3">
+      <div style="grid-column: 1 / -1; text-align:center; padding: 50px; color:var(--text-dim);">
+        Đang tải thực đơn đêm...
+      </div>
+    </div>
+
+    <!-- Dải thông báo ưu đãi cuối trang chuẩn Figma -->
+    <div style="background: linear-gradient(90deg, #1e293b, #2a1b14); border: 1px dashed rgba(249,115,22,0.4); border-radius: var(--radius-md); padding: 18px 24px; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 14px; margin-top: 20px;">
+      <div style="display:flex; align-items:center; gap:12px;">
+        <span style="font-size:1.8rem;">🌙</span>
+        <div>
+          <strong style="color:var(--text-main); font-size:0.95rem;">Ưu đãi đêm khuya: Miễn phí giao hàng COD cho mọi đơn hàng</strong>
+          <div style="color:var(--text-dim); font-size:0.82rem;">Đóng hộp giữ nhiệt giao tận phòng trong 20-30 phút</div>
+        </div>
+      </div>
+      <a href="cart.html" class="btn btn-primary" style="padding:8px 18px; font-size:0.9rem;">
+        🛒 Xem Giỏ Hàng
+      </a>
+    </div>
+  </main>
+
+  <footer id="app-footer"></footer>
+
+  <!-- Scripts -->
+  <script src="https://cdn.jsdelivr.net/npm/axios@1.7.9/dist/axios.min.js"></script>
+  <script src="js/config.js"></script>
+  <script src="js/utils.js"></script>
+  <script src="js/api.js"></script>
+  <script src="js/cart-storage.js"></script>
+  <script src="js/layout.js"></script>
+  <script src="js/pages/dishes.js"></script>
+</body>
+</html>

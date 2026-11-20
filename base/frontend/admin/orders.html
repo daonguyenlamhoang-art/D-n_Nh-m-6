@@ -1,0 +1,343 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Quản Lý Đơn Hàng | NightFood Admin</title>
+  <link rel="stylesheet" href="../css/style.css">
+  <link rel="stylesheet" href="../css/admin.css">
+</head>
+<body data-root="../">
+  <div class="admin-layout">
+    <!-- Sidebar -->
+    <aside class="admin-sidebar">
+      <div class="admin-sidebar-header">
+        <a href="dashboard.html" class="brand-logo">
+          <span class="logo-icon">🌙</span>
+          <span>Night<span class="highlight">Food</span></span>
+        </a>
+        <div style="color:var(--text-dim); font-size:0.78rem; margin-top:4px;">BẢNG QUẢN TRỊ</div>
+      </div>
+
+      <ul class="admin-menu">
+        <li><a href="dashboard.html">📊 Tổng Quan (Dashboard)</a></li>
+        <li><a href="orders.html" class="active">📦 Quản Lý Đơn Hàng</a></li>
+        <li><a href="dishes.html">🍜 Quản Lý Thực Đơn</a></li>
+        <li><a href="categories.html">📑 Quản Lý Danh Mục</a></li>
+        <li><a href="../index.html" target="_blank">🌐 Xem Trang Khách Hàng ↗</a></li>
+      </ul>
+
+      <div style="padding: 16px 20px; border-top:1px solid var(--border-color);">
+        <button id="btn-admin-logout" class="btn btn-secondary" style="width:100%; font-size:0.85rem; padding:8px;">
+          🚪 Đăng Xuất
+        </button>
+      </div>
+    </aside>
+
+    <!-- Main -->
+    <main class="admin-main">
+      <div class="admin-topbar">
+        <div>
+          <h1 style="font-size:1.6rem; font-weight:800; color:var(--text-main);">Quản Lý Đơn Hàng (FR-11, FR-12)</h1>
+          <p style="color:var(--text-muted); font-size:0.88rem;">Tiếp nhận đơn mới, xác nhận, chuẩn bị món, giao hàng và hoàn thành theo quy trình chuẩn 4.1</p>
+        </div>
+
+        <div>
+          <button id="btn-refresh-orders" class="btn btn-secondary" style="font-size:0.85rem; padding:6px 14px;">
+            🔄 Làm Mới Đơn
+          </button>
+        </div>
+      </div>
+
+      <!-- Lọc và tìm kiếm đơn -->
+      <div class="card-panel" style="padding:16px; margin-bottom:20px; display:flex; gap:16px; align-items:center; flex-wrap:wrap;">
+        <div style="flex-grow:1; max-width:320px;">
+          <input type="text" id="admin-order-search" class="form-control" placeholder="Tìm theo mã đơn, SĐT hoặc tên..." style="padding:8px 12px; font-size:0.9rem;">
+        </div>
+
+        <div style="min-width:200px;">
+          <select id="admin-order-status-filter" class="form-control" style="padding:8px 12px; font-size:0.9rem;">
+            <option value="">-- Tất cả trạng thái --</option>
+            <option value="pending">Chờ xác nhận</option>
+            <option value="confirmed">Đã xác nhận</option>
+            <option value="preparing">Đang chuẩn bị</option>
+            <option value="delivering">Đang giao hàng</option>
+            <option value="completed">Hoàn thành</option>
+            <option value="cancelled">Đã hủy</option>
+          </select>
+        </div>
+      </div>
+
+      <!-- Bảng danh sách đơn hàng -->
+      <div class="card-panel">
+        <div class="table-responsive">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>Mã đơn</th>
+                <th>Khách hàng</th>
+                <th>Số điện thoại</th>
+                <th>Địa chỉ nhận</th>
+                <th>Tổng tiền (COD)</th>
+                <th>Thời gian</th>
+                <th>Trạng thái</th>
+                <th>Thao tác</th>
+              </tr>
+            </thead>
+            <tbody id="admin-orders-tbody">
+              <tr>
+                <td colspan="8" style="text-align:center; padding:30px; color:var(--text-dim);">Đang tải danh sách đơn hàng...</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <!-- Modal Chi tiết và Cập nhật trạng thái đơn hàng (FR-12, Mục 4.1) -->
+  <div id="order-detail-modal" class="modal-overlay">
+    <div class="modal-card" style="max-width:680px;">
+      <div class="modal-header">
+        <h3>Chi Tiết Đơn Hàng <span id="modal-order-code" style="color:var(--accent-secondary);"></span></h3>
+        <button class="modal-close-btn" id="modal-order-close">&times;</button>
+      </div>
+      <div class="modal-body" id="modal-order-body">
+        <div style="text-align:center; padding:30px; color:var(--text-dim);">Đang tải chi tiết...</div>
+      </div>
+      <div class="modal-footer" id="modal-order-actions">
+        <!-- Nút chuyển trạng thái được render linh hoạt dựa vào trạng thái hiện tại -->
+      </div>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/axios@1.7.9/dist/axios.min.js"></script>
+  <script src="../js/config.js"></script>
+  <script src="../js/utils.js"></script>
+  <script src="../js/api.js"></script>
+  <script src="../js/pages/admin.js"></script>
+  <script>
+    let currentViewingOrder = null;
+
+    document.addEventListener("DOMContentLoaded", async () => {
+      const user = await checkAdminAuth();
+      if (!user) return;
+
+      document.getElementById("btn-admin-logout").addEventListener("click", handleAdminLogout);
+      document.getElementById("btn-refresh-orders").addEventListener("click", loadOrders);
+
+      document.getElementById("admin-order-search").addEventListener("input", () => loadOrders());
+      document.getElementById("admin-order-status-filter").addEventListener("change", () => loadOrders());
+
+      document.getElementById("modal-order-close").addEventListener("click", closeOrderModal);
+
+      // Nếu có ?id= trên URL, tự mở modal đơn đó
+      const urlParams = new URLSearchParams(window.location.search);
+      const orderIdParam = urlParams.get("id");
+
+      await loadOrders();
+
+      if (orderIdParam) {
+        openOrderDetail(parseInt(orderIdParam));
+      }
+    });
+
+    async function loadOrders() {
+      const tbody = document.getElementById("admin-orders-tbody");
+      const search = document.getElementById("admin-order-search").value.trim();
+      const statusFilter = document.getElementById("admin-order-status-filter").value;
+
+      try {
+        const params = { page: 1, page_size: 100 };
+        if (search) params.search = search;
+        if (statusFilter) params.status = statusFilter;
+
+        const res = await api.get("/admin/orders", params);
+        const orders = res.items || [];
+
+        if (orders.length === 0) {
+          tbody.innerHTML = `<tr><td colspan="8" style="text-align:center; padding:30px; color:var(--text-dim);">Không tìm thấy đơn hàng nào.</td></tr>`;
+          return;
+        }
+
+        tbody.innerHTML = orders.map(order => `
+          <tr>
+            <td><strong style="color:var(--accent-secondary);">${escapeHtml(order.order_code)}</strong></td>
+            <td><strong>${escapeHtml(order.customer_name)}</strong></td>
+            <td>${escapeHtml(order.phone)}</td>
+            <td style="max-width:200px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;" title="${escapeHtml(order.address)}">
+              ${escapeHtml(order.address)}
+            </td>
+            <td style="color:var(--accent-secondary); font-weight:700;">${formatVND(order.total_amount)}</td>
+            <td style="font-size:0.85rem; color:var(--text-dim);">${formatDateTime(order.created_at)}</td>
+            <td><span class="badge-status badge-${order.status}">${escapeHtml(order.status)}</span></td>
+            <td>
+              <button class="btn btn-secondary" style="padding:4px 10px; font-size:0.8rem;" onclick="openOrderDetail(${order.id})">
+                Chi tiết & Xử lý
+              </button>
+            </td>
+          </tr>
+        `).join("");
+
+      } catch (err) {
+        tbody.innerHTML = `<tr><td colspan="8" style="color:var(--danger); text-align:center; padding:20px;">Lỗi tải đơn hàng: ${escapeHtml(err.message)}</td></tr>`;
+      }
+    }
+
+    async function openOrderDetail(orderId) {
+      const modal = document.getElementById("order-detail-modal");
+      const bodyEl = document.getElementById("modal-order-body");
+      const actionsEl = document.getElementById("modal-order-actions");
+
+      modal.classList.add("active");
+      bodyEl.innerHTML = `<div style="text-align:center; padding:30px; color:var(--text-dim);">Đang tải chi tiết đơn hàng...</div>`;
+      actionsEl.innerHTML = "";
+
+      try {
+        currentViewingOrder = await api.get(`/admin/orders/${orderId}`);
+        const order = currentViewingOrder;
+
+        document.getElementById("modal-order-code").textContent = order.order_code;
+
+        const itemsRows = order.items.map(it => `
+          <tr>
+            <td>
+              <strong>${escapeHtml(it.dish_name)}</strong>
+              ${it.option_name ? `<span style="color:var(--text-dim); font-size:0.8rem;"> (+${escapeHtml(it.option_name)})</span>` : ''}
+            </td>
+            <td style="color:var(--accent-secondary);">${formatVND(it.unit_price)}</td>
+            <td style="text-align:center;">${it.quantity}</td>
+            <td style="color:var(--accent-secondary); font-weight:700;">${formatVND(it.subtotal)}</td>
+          </tr>
+        `).join("");
+
+        const historiesRows = (order.status_histories && order.status_histories.length > 0)
+          ? order.status_histories.map(h => `
+            <div style="font-size:0.82rem; padding:4px 0; border-bottom:1px solid rgba(255,255,255,0.05); display:flex; justify-content:space-between;">
+              <span><strong>${escapeHtml(h.old_status || 'Khởi tạo')}</strong> → <strong style="color:var(--accent-primary);">${escapeHtml(h.new_status)}</strong>: ${escapeHtml(h.note || '')}</span>
+              <span style="color:var(--text-dim);">${formatDateTime(h.changed_at)}</span>
+            </div>
+          `).join("")
+          : `<div style="color:var(--text-dim); font-size:0.82rem;">Chưa có lịch sử thay đổi</div>`;
+
+        bodyEl.innerHTML = `
+          <div style="display:grid; grid-template-columns:1fr 1fr; gap:16px; margin-bottom:16px; background:var(--bg-main); padding:14px; border-radius:var(--radius-md);">
+            <div>
+              <div style="color:var(--text-dim); font-size:0.8rem;">NGƯỜI NHẬN</div>
+              <div style="font-size:1.05rem; font-weight:700; color:var(--text-main);">${escapeHtml(order.customer_name)}</div>
+              <div style="color:var(--accent-secondary); font-weight:600;">📞 ${escapeHtml(order.phone)}</div>
+            </div>
+            <div>
+              <div style="color:var(--text-dim); font-size:0.8rem;">TRẠNG THÁI HIỆN TẠI</div>
+              <div><span class="badge-status badge-${order.status}" style="font-size:0.9rem;">${escapeHtml(order.status)}</span></div>
+              <div style="color:var(--text-dim); font-size:0.8rem; margin-top:4px;">Đặt lúc: ${formatDateTime(order.created_at)}</div>
+            </div>
+          </div>
+
+          <div style="margin-bottom:14px;">
+            <div style="color:var(--text-dim); font-size:0.8rem;">ĐỊA CHỈ GIAO HÀNG</div>
+            <div style="color:var(--text-main); font-weight:500;">📍 ${escapeHtml(order.address)}</div>
+            ${order.note ? `<div style="color:var(--accent-secondary); font-size:0.85rem; margin-top:4px;">📝 Ghi chú: ${escapeHtml(order.note)}</div>` : ''}
+          </div>
+
+          <h4 style="font-size:0.95rem; font-weight:700; margin-bottom:8px;">Danh Sách Món Trong Đơn</h4>
+          <div class="table-responsive" style="margin-bottom:16px;">
+            <table class="data-table" style="font-size:0.88rem;">
+              <thead>
+                <tr>
+                  <th>Món</th>
+                  <th>Đơn giá</th>
+                  <th style="text-align:center;">Số lượng</th>
+                  <th>Thành tiền</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${itemsRows}
+              </tbody>
+            </table>
+          </div>
+
+          <div style="text-align:right; font-size:1.25rem; font-weight:800; color:var(--accent-secondary); margin-bottom:20px;">
+            Tổng tiền: ${formatVND(order.total_amount)}
+          </div>
+
+          <h4 style="font-size:0.85rem; font-weight:700; color:var(--text-dim); margin-bottom:6px;">Lịch Sử Chuyển Trạng Thái (Bảng order_status_histories)</h4>
+          <div style="background:var(--bg-main); padding:10px; border-radius:var(--radius-sm); max-height:120px; overflow-y:auto;">
+            ${historiesRows}
+          </div>
+        `;
+
+        // Render các nút chuyển trạng thái hợp lệ theo ma trận 4.1
+        renderStatusTransitionButtons(order);
+
+      } catch (err) {
+        bodyEl.innerHTML = `<div style="color:var(--danger); text-align:center; padding:30px;">Lỗi tải đơn hàng: ${escapeHtml(err.message)}</div>`;
+      }
+    }
+
+    function renderStatusTransitionButtons(order) {
+      const actionsEl = document.getElementById("modal-order-actions");
+      actionsEl.innerHTML = "";
+
+      const st = order.status;
+
+      if (st === "pending") {
+        actionsEl.innerHTML = `
+          <button class="btn btn-danger" onclick="updateOrderStatus(${order.id}, 'cancelled', '${st}')">❌ Hủy Đơn</button>
+          <button class="btn btn-primary" onclick="updateOrderStatus(${order.id}, 'confirmed', '${st}')">✅ Xác Nhận Đơn</button>
+        `;
+      } else if (st === "confirmed") {
+        actionsEl.innerHTML = `
+          <button class="btn btn-danger" onclick="updateOrderStatus(${order.id}, 'cancelled', '${st}')">❌ Hủy Đơn</button>
+          <button class="btn btn-primary" onclick="updateOrderStatus(${order.id}, 'preparing', '${st}')">🍳 Nấu Món (Chuẩn Bị)</button>
+        `;
+      } else if (st === "preparing") {
+        actionsEl.innerHTML = `
+          <button class="btn btn-danger" onclick="updateOrderStatus(${order.id}, 'cancelled', '${st}')">❌ Hủy Đơn</button>
+          <button class="btn btn-primary" onclick="updateOrderStatus(${order.id}, 'delivering', '${st}')">🛵 Giao Hàng Cho Shipper</button>
+        `;
+      } else if (st === "delivering") {
+        actionsEl.innerHTML = `
+          <button class="btn btn-primary" style="background-color:var(--success);" onclick="updateOrderStatus(${order.id}, 'completed', '${st}')">🎉 Đã Giao & Nhận Tiền COD (Hoàn Thành)</button>
+        `;
+      } else if (st === "completed" || st === "cancelled") {
+        actionsEl.innerHTML = `
+          <span style="color:var(--text-dim); font-size:0.85rem; margin-right:auto;">
+            Đơn hàng đã kết thúc ở trạng thái <strong>${st}</strong> (Không được đổi trạng thái nữa)
+          </span>
+          <button class="btn btn-secondary" onclick="closeOrderModal()">Đóng</button>
+        `;
+      }
+    }
+
+    async function updateOrderStatus(orderId, newStatus, currentExpectedStatus) {
+      if (!confirm(`Bạn có chắc muốn chuyển trạng thái đơn này sang '${newStatus}'?`)) {
+        return;
+      }
+
+      try {
+        await api.patch(`/admin/orders/${orderId}/status`, {
+          status: newStatus,
+          expected_current_status: currentExpectedStatus,
+          note: `Admin chuyển trạng thái sang ${newStatus}`,
+        });
+
+        showToast("Cập nhật trạng thái đơn thành công!", "success");
+        await openOrderDetail(orderId);
+        await loadOrders();
+      } catch (err) {
+        showToast(err.message || "Lỗi khi cập nhật trạng thái đơn", "error");
+        if (err.status === 409) {
+          // Xung đột phiên hoặc người khác đã đổi
+          await openOrderDetail(orderId);
+          await loadOrders();
+        }
+      }
+    }
+
+    function closeOrderModal() {
+      document.getElementById("order-detail-modal").classList.remove("active");
+    }
+  </script>
+</body>
+</html>

@@ -1,0 +1,353 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Quản Lý Món Ăn | NightFood Admin</title>
+  <link rel="stylesheet" href="../css/style.css">
+  <link rel="stylesheet" href="../css/admin.css">
+</head>
+<body data-root="../">
+  <div class="admin-layout">
+    <!-- Sidebar -->
+    <aside class="admin-sidebar">
+      <div class="admin-sidebar-header">
+        <a href="dashboard.html" class="brand-logo">
+          <span class="logo-icon">🌙</span>
+          <span>Night<span class="highlight">Food</span></span>
+        </a>
+        <div style="color:var(--text-dim); font-size:0.78rem; margin-top:4px;">BẢNG QUẢN TRỊ</div>
+      </div>
+
+      <ul class="admin-menu">
+        <li><a href="dashboard.html">📊 Tổng Quan (Dashboard)</a></li>
+        <li><a href="orders.html">📦 Quản Lý Đơn Hàng</a></li>
+        <li><a href="dishes.html" class="active">🍜 Quản Lý Thực Đơn</a></li>
+        <li><a href="categories.html">📑 Quản Lý Danh Mục</a></li>
+        <li><a href="../index.html" target="_blank">🌐 Xem Trang Khách Hàng ↗</a></li>
+      </ul>
+
+      <div style="padding: 16px 20px; border-top:1px solid var(--border-color);">
+        <button id="btn-admin-logout" class="btn btn-secondary" style="width:100%; font-size:0.85rem; padding:8px;">
+          🚪 Đăng Xuất
+        </button>
+      </div>
+    </aside>
+
+    <!-- Main -->
+    <main class="admin-main">
+      <div class="admin-topbar">
+        <div>
+          <h1 style="font-size:1.6rem; font-weight:800; color:var(--text-main);">Quản Lý Món Ăn (FR-09)</h1>
+          <p style="color:var(--text-muted); font-size:0.88rem;">Thêm món mới, cập nhật giá, bật/tắt còn hàng hoặc ẩn món (soft delete)</p>
+        </div>
+
+        <div>
+          <button id="btn-open-add-dish" class="btn btn-primary" style="padding:8px 16px; font-size:0.9rem;">
+            + Thêm Món Mới
+          </button>
+        </div>
+      </div>
+
+      <!-- Bộ lọc và tìm kiếm -->
+      <div class="card-panel" style="padding:16px; margin-bottom:20px; display:flex; gap:16px; align-items:center; flex-wrap:wrap;">
+        <div style="flex-grow:1; max-width:360px;">
+          <input type="text" id="admin-dish-search" class="form-control" placeholder="Tìm theo tên món..." style="padding:8px 12px; font-size:0.9rem;">
+        </div>
+        <div style="min-width:200px;">
+          <select id="admin-dish-cat-filter" class="form-control" style="padding:8px 12px; font-size:0.9rem;">
+            <option value="">-- Tất cả danh mục --</option>
+          </select>
+        </div>
+      </div>
+
+      <!-- Bảng món ăn -->
+      <div class="card-panel">
+        <div class="table-responsive">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>Ảnh</th>
+                <th>Tên món ăn</th>
+                <th>Danh mục</th>
+                <th>Giá bán</th>
+                <th>Tình trạng</th>
+                <th>Hiển thị</th>
+                <th>Thao tác</th>
+              </tr>
+            </thead>
+            <tbody id="admin-dishes-tbody">
+              <tr>
+                <td colspan="7" style="text-align:center; padding:30px; color:var(--text-dim);">Đang tải danh sách món...</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <!-- Modal Thêm / Sửa món ăn -->
+  <div id="dish-modal" class="modal-overlay">
+    <div class="modal-card">
+      <div class="modal-header">
+        <h3 id="modal-dish-title">Thêm Món Ăn Mới</h3>
+        <button class="modal-close-btn" id="modal-dish-close">&times;</button>
+      </div>
+      <form id="dish-form">
+        <input type="hidden" id="dish-form-id">
+        <div class="modal-body">
+          <div class="form-group">
+            <label class="form-label">Tên món ăn <span class="req">*</span></label>
+            <input type="text" id="dish-form-name" class="form-control" placeholder="Ví dụ: Mì trộn gà sốt cay" maxlength="150" required>
+          </div>
+
+          <div style="display:grid; grid-template-columns: 1fr 1fr; gap:14px;">
+            <div class="form-group">
+              <label class="form-label">Danh mục <span class="req">*</span></label>
+              <select id="dish-form-category" class="form-control" required></select>
+            </div>
+            <div class="form-group">
+              <label class="form-label">Giá bán (VND) <span class="req">*</span></label>
+              <input type="number" id="dish-form-price" class="form-control" placeholder="35000" min="1000" required>
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">Link ảnh món (URL bắt đầu bằng http:// hoặc https://)</label>
+            <input type="url" id="dish-form-img" class="form-control" placeholder="https://images.unsplash.com/...">
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">Mô tả món ăn</label>
+            <textarea id="dish-form-desc" class="form-control" rows="2" placeholder="Mô tả nguyên liệu, hương vị..."></textarea>
+          </div>
+
+          <div style="display:flex; gap:20px;">
+            <label style="display:flex; align-items:center; gap:8px; cursor:pointer;">
+              <input type="checkbox" id="dish-form-available" checked>
+              <span>Còn hàng (cho phép khách đặt)</span>
+            </label>
+            <label style="display:flex; align-items:center; gap:8px; cursor:pointer;">
+              <input type="checkbox" id="dish-form-active" checked>
+              <span>Hiển thị trên web</span>
+            </label>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" id="modal-dish-cancel">Hủy</button>
+          <button type="submit" class="btn btn-primary" id="modal-dish-save">Lưu Món</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/axios@1.7.9/dist/axios.min.js"></script>
+  <script src="../js/config.js"></script>
+  <script src="../js/utils.js"></script>
+  <script src="../js/api.js"></script>
+  <script src="../js/pages/admin.js"></script>
+  <script>
+    let allCategories = [];
+    let dishesList = [];
+
+    document.addEventListener("DOMContentLoaded", async () => {
+      const user = await checkAdminAuth();
+      if (!user) return;
+
+      document.getElementById("btn-admin-logout").addEventListener("click", handleAdminLogout);
+      await loadCategories();
+      await loadDishes();
+
+      // Sự kiện tìm kiếm & lọc
+      document.getElementById("admin-dish-search").addEventListener("input", () => loadDishes());
+      document.getElementById("admin-dish-cat-filter").addEventListener("change", () => loadDishes());
+
+      // Modal
+      document.getElementById("btn-open-add-dish").addEventListener("click", () => openDishModal());
+      document.getElementById("modal-dish-close").addEventListener("click", closeDishModal);
+      document.getElementById("modal-dish-cancel").addEventListener("click", closeDishModal);
+      document.getElementById("dish-form").addEventListener("submit", handleSaveDish);
+    });
+
+    async function loadCategories() {
+      try {
+        allCategories = await api.get("/admin/categories");
+        const filterSelect = document.getElementById("admin-dish-cat-filter");
+        const formSelect = document.getElementById("dish-form-category");
+
+        let filterOpts = `<option value="">-- Tất cả danh mục --</option>`;
+        let formOpts = "";
+
+        allCategories.forEach(c => {
+          filterOpts += `<option value="${c.id}">${escapeHtml(c.name)}</option>`;
+          formOpts += `<option value="${c.id}">${escapeHtml(c.name)}</option>`;
+        });
+
+        filterSelect.innerHTML = filterOpts;
+        formSelect.innerHTML = formOpts;
+      } catch (err) {
+        showToast("Lỗi tải danh mục: " + err.message, "error");
+      }
+    }
+
+    async function loadDishes() {
+      const tbody = document.getElementById("admin-dishes-tbody");
+      const search = document.getElementById("admin-dish-search").value.trim();
+      const catId = document.getElementById("admin-dish-cat-filter").value;
+
+      try {
+        const params = { page: 1, page_size: 100 };
+        if (search) params.search = search;
+        if (catId) params.category_id = catId;
+
+        const res = await api.get("/admin/dishes", params);
+        dishesList = res.items || [];
+
+        if (dishesList.length === 0) {
+          tbody.innerHTML = `
+            <tr>
+              <td colspan="7" style="text-align:center; padding:30px; color:var(--text-dim);">Không có món ăn nào phù hợp.</td>
+            </tr>
+          `;
+          return;
+        }
+
+        const defaultImg = "https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=500&auto=format&fit=crop&q=60";
+
+        tbody.innerHTML = dishesList.map(dish => `
+          <tr style="${!dish.is_active ? 'opacity:0.55;' : ''}">
+            <td>
+              <img src="${dish.image_url || defaultImg}" alt="${escapeHtml(dish.name)}" style="width:50px; height:50px; object-fit:cover; border-radius:var(--radius-sm);" onerror="this.src='${defaultImg}'">
+            </td>
+            <td>
+              <strong>${escapeHtml(dish.name)}</strong>
+              ${!dish.is_active ? '<span style="color:#ef4444; font-size:0.75rem;"> [ĐANG ẨN]</span>' : ''}
+            </td>
+            <td><span class="badge-tag">${escapeHtml(dish.category_name || '-')}</span></td>
+            <td style="color:var(--accent-secondary); font-weight:700;">${formatVND(dish.price)}</td>
+            <td>
+              <button 
+                class="btn ${dish.is_available ? 'btn-secondary' : 'btn-danger'}" 
+                style="padding:3px 8px; font-size:0.78rem;" 
+                onclick="toggleAvailability(${dish.id}, ${!dish.is_available})">
+                ${dish.is_available ? '✓ Còn bán' : '✗ Hết hàng'}
+              </button>
+            </td>
+            <td>
+              <button 
+                class="btn ${dish.is_active ? 'btn-secondary' : 'btn-danger'}" 
+                style="padding:3px 8px; font-size:0.78rem;" 
+                onclick="toggleActive(${dish.id}, ${!dish.is_active})">
+                ${dish.is_active ? '👁️ Đang hiện' : '🔒 Đã ẩn'}
+              </button>
+            </td>
+            <td>
+              <button class="btn btn-secondary" style="padding:4px 8px; font-size:0.8rem;" onclick="openEditModal(${dish.id})">
+                ✏️ Sửa
+              </button>
+            </td>
+          </tr>
+        `).join("");
+
+      } catch (err) {
+        tbody.innerHTML = `<tr><td colspan="7" style="color:var(--danger); text-align:center; padding:20px;">Lỗi: ${escapeHtml(err.message)}</td></tr>`;
+      }
+    }
+
+    async function toggleAvailability(id, newStatus) {
+      try {
+        await api.put(`/admin/dishes/${id}`, { is_available: newStatus });
+        showToast("Đã cập nhật trạng thái còn món", "success");
+        await loadDishes();
+      } catch (err) {
+        showToast("Lỗi: " + err.message, "error");
+      }
+    }
+
+    async function toggleActive(id, newStatus) {
+      try {
+        await api.put(`/admin/dishes/${id}`, { is_active: newStatus });
+        showToast(newStatus ? "Đã hiện món công khai" : "Đã ẩn món (Soft delete)", "info");
+        await loadDishes();
+      } catch (err) {
+        showToast("Lỗi: " + err.message, "error");
+      }
+    }
+
+    function openDishModal(dish = null) {
+      const modal = document.getElementById("dish-modal");
+      const title = document.getElementById("modal-dish-title");
+
+      if (dish) {
+        title.textContent = "Chỉnh Sửa Món Ăn";
+        document.getElementById("dish-form-id").value = dish.id;
+        document.getElementById("dish-form-name").value = dish.name;
+        document.getElementById("dish-form-category").value = dish.category_id;
+        document.getElementById("dish-form-price").value = dish.price;
+        document.getElementById("dish-form-img").value = dish.image_url || "";
+        document.getElementById("dish-form-desc").value = dish.description || "";
+        document.getElementById("dish-form-available").checked = dish.is_available;
+        document.getElementById("dish-form-active").checked = dish.is_active;
+      } else {
+        title.textContent = "Thêm Món Ăn Mới";
+        document.getElementById("dish-form").reset();
+        document.getElementById("dish-form-id").value = "";
+        document.getElementById("dish-form-available").checked = true;
+        document.getElementById("dish-form-active").checked = true;
+      }
+      modal.classList.add("active");
+    }
+
+    function openEditModal(dishId) {
+      const dish = dishesList.find(d => d.id === dishId);
+      if (dish) openDishModal(dish);
+    }
+
+    function closeDishModal() {
+      document.getElementById("dish-modal").classList.remove("active");
+    }
+
+    async function handleSaveDish(e) {
+      e.preventDefault();
+      const id = document.getElementById("dish-form-id").value;
+      const name = document.getElementById("dish-form-name").value.trim();
+      const category_id = parseInt(document.getElementById("dish-form-category").value);
+      const price = parseInt(document.getElementById("dish-form-price").value);
+      const image_url = document.getElementById("dish-form-img").value.trim();
+      const description = document.getElementById("dish-form-desc").value.trim();
+      const is_available = document.getElementById("dish-form-available").checked;
+      const is_active = document.getElementById("dish-form-active").checked;
+
+      if (!name || isNaN(price) || price <= 0 || isNaN(category_id)) {
+        showToast("Vui lòng điền tên, danh mục và giá hợp lệ (> 0)", "warning");
+        return;
+      }
+
+      const payload = {
+        name,
+        category_id,
+        price,
+        image_url: image_url || null,
+        description: description || null,
+        is_available,
+        is_active,
+      };
+
+      try {
+        if (id) {
+          await api.put(`/admin/dishes/${id}`, payload);
+          showToast("Cập nhật món thành công!", "success");
+        } else {
+          await api.post("/admin/dishes", payload);
+          showToast("Thêm món mới thành công!", "success");
+        }
+        closeDishModal();
+        await loadDishes();
+      } catch (err) {
+        showToast("Lỗi lưu món: " + err.message, "error");
+      }
+    }
+  </script>
+</body>
+</html>

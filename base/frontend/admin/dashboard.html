@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Dashboard Quản Trị | NightFood</title>
+  <link rel="stylesheet" href="../css/style.css">
+  <link rel="stylesheet" href="../css/admin.css">
+</head>
+<body data-root="../">
+  <div class="admin-layout">
+    <!-- Sidebar -->
+    <aside class="admin-sidebar">
+      <div class="admin-sidebar-header">
+        <a href="dashboard.html" class="brand-logo">
+          <span class="logo-icon">🌙</span>
+          <span>Night<span class="highlight">Food</span></span>
+        </a>
+        <div style="color:var(--text-dim); font-size:0.78rem; margin-top:4px;">BẢNG QUẢN TRỊ</div>
+      </div>
+
+      <ul class="admin-menu">
+        <li><a href="dashboard.html" class="active">📊 Tổng Quan (Dashboard)</a></li>
+        <li><a href="orders.html">📦 Quản Lý Đơn Hàng</a></li>
+        <li><a href="dishes.html">🍜 Quản Lý Thực Đơn</a></li>
+        <li><a href="categories.html">📑 Quản Lý Danh Mục</a></li>
+        <li><a href="../index.html" target="_blank">🌐 Xem Trang Khách Hàng ↗</a></li>
+      </ul>
+
+      <div style="padding: 16px 20px; border-top:1px solid var(--border-color);">
+        <button id="btn-admin-logout" class="btn btn-secondary" style="width:100%; font-size:0.85rem; padding:8px;">
+          🚪 Đăng Xuất
+        </button>
+      </div>
+    </aside>
+
+    <!-- Main Content -->
+    <main class="admin-main">
+      <div class="admin-topbar">
+        <div>
+          <h1 style="font-size:1.6rem; font-weight:800; color:var(--text-main);">Tổng Quan Kinh Doanh Đêm</h1>
+          <p style="color:var(--text-muted); font-size:0.88rem;">Theo dõi nhanh đơn hàng, doanh thu và trạng thái quán (FR-15)</p>
+        </div>
+
+        <div style="display:flex; align-items:center; gap:16px;">
+          <!-- Nút bật tắt chế độ ép mở cửa phục vụ kiểm thử (FR-14, TC-39) -->
+          <button id="btn-store-toggle" class="btn btn-secondary" style="font-size:0.85rem; padding:6px 12px;">
+            ⏰ Trạng thái mở cửa
+          </button>
+
+          <div class="admin-user-pill">
+            <span>👤</span>
+            <strong id="admin-display-name">Admin</strong>
+          </div>
+        </div>
+      </div>
+
+      <!-- Thống kê chỉ số (FR-15) -->
+      <div class="stats-grid">
+        <div class="stat-card">
+          <div class="stat-icon">📦</div>
+          <div class="stat-info">
+            <h4>Tổng Số Đơn</h4>
+            <div id="stat-total-orders" class="stat-value">0</div>
+          </div>
+        </div>
+
+        <div class="stat-card">
+          <div class="stat-icon" style="background-color:rgba(245,158,11,0.15); color:var(--warning);">⏳</div>
+          <div class="stat-info">
+            <h4>Đơn Chờ Xác Nhận</h4>
+            <div id="stat-pending-orders" class="stat-value" style="color:var(--warning);">0</div>
+          </div>
+        </div>
+
+        <div class="stat-card">
+          <div class="stat-icon" style="background-color:rgba(34,197,94,0.15); color:var(--success);">✅</div>
+          <div class="stat-info">
+            <h4>Đơn Hoàn Thành</h4>
+            <div id="stat-completed-orders" class="stat-value" style="color:var(--success);">0</div>
+          </div>
+        </div>
+
+        <div class="stat-card">
+          <div class="stat-icon" style="background-color:rgba(251,191,36,0.15); color:var(--accent-secondary);">💰</div>
+          <div class="stat-info">
+            <h4>Doanh Thu Hoàn Tất</h4>
+            <div id="stat-total-revenue" class="stat-value" style="color:var(--accent-secondary);">0đ</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Đơn hàng gần nhất -->
+      <div class="card-panel">
+        <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:18px;">
+          <h2 style="font-size:1.15rem; font-weight:700;">Đơn Hàng Mới Nhất Cần Xử Lý</h2>
+          <a href="orders.html" class="btn btn-secondary" style="font-size:0.82rem; padding:4px 10px;">Xem toàn bộ đơn →</a>
+        </div>
+
+        <div class="table-responsive">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>Mã đơn</th>
+                <th>Khách hàng</th>
+                <th>Số điện thoại</th>
+                <th>Thời gian đặt</th>
+                <th>Tổng tiền</th>
+                <th>Trạng thái</th>
+                <th>Hành động</th>
+              </tr>
+            </thead>
+            <tbody id="recent-orders-tbody">
+              <tr>
+                <td colspan="7" style="text-align:center; color:var(--text-dim); padding:24px;">Đang tải dữ liệu...</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/axios@1.7.9/dist/axios.min.js"></script>
+  <script src="../js/config.js"></script>
+  <script src="../js/utils.js"></script>
+  <script src="../js/api.js"></script>
+  <script src="../js/pages/admin.js"></script>
+  <script>
+    document.addEventListener("DOMContentLoaded", async () => {
+      const user = await checkAdminAuth();
+      if (!user) return;
+
+      document.getElementById("btn-admin-logout").addEventListener("click", handleAdminLogout);
+      document.getElementById("btn-store-toggle").addEventListener("click", toggleStoreStatus);
+
+      await loadDashboardData();
+    });
+
+    async function loadDashboardData() {
+      try {
+        // Tải số liệu thống kê (FR-15)
+        const stats = await api.get("/admin/dashboard/stats");
+        document.getElementById("stat-total-orders").textContent = stats.total_orders;
+        document.getElementById("stat-pending-orders").textContent = stats.pending_orders;
+        document.getElementById("stat-completed-orders").textContent = stats.completed_orders;
+        document.getElementById("stat-total-revenue").textContent = formatVND(stats.total_revenue);
+
+        // Tải đơn hàng gần nhất
+        const ordersRes = await api.get("/admin/orders", { page: 1, page_size: 5 });
+        const tbody = document.getElementById("recent-orders-tbody");
+
+        if (!ordersRes.items || ordersRes.items.length === 0) {
+          tbody.innerHTML = `
+            <tr>
+              <td colspan="7" style="text-align:center; color:var(--text-dim); padding:24px;">Chưa có đơn hàng nào được tạo.</td>
+            </tr>
+          `;
+          return;
+        }
+
+        tbody.innerHTML = ordersRes.items.map(order => `
+          <tr>
+            <td><strong style="color:var(--accent-secondary);">${escapeHtml(order.order_code)}</strong></td>
+            <td>${escapeHtml(order.customer_name)}</td>
+            <td>${escapeHtml(order.phone)}</td>
+            <td>${formatDateTime(order.created_at)}</td>
+            <td style="color:var(--accent-secondary); font-weight:700;">${formatVND(order.total_amount)}</td>
+            <td><span class="badge-status badge-${order.status}">${escapeHtml(order.status)}</span></td>
+            <td>
+              <a href="orders.html?id=${order.id}" class="btn btn-secondary" style="padding:4px 8px; font-size:0.8rem;">Xem chi tiết</a>
+            </td>
+          </tr>
+        `).join("");
+
+        // Cập nhật text nút kiểm thử store
+        const storeStatus = await api.get("/store/status");
+        const statusBtn = document.getElementById("btn-store-toggle");
+        if (statusBtn) {
+          statusBtn.textContent = storeStatus.force_open ? "⚡ Đang Ép Mở (Click để tắt)" : "🌙 Tuân theo giờ thật (18h-2h)";
+          statusBtn.className = storeStatus.force_open ? "btn btn-primary" : "btn btn-secondary";
+        }
+
+      } catch (err) {
+        showToast("Lỗi tải dashboard: " + err.message, "error");
+      }
+    }
+  </script>
+</body>
+</html>
