@@ -4,11 +4,19 @@ from typing import Optional
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, status
 from sqlalchemy.orm import Session, joinedload
 
+from app.core.auth import SHIPPING_AREA_FEES, calculate_shipping_fee
 from app.db.session import get_db
 from app.models.cart import Cart, CartItem
 from app.models.category import Category
 from app.models.dish import Dish, DishOption
-from app.schemas.cart import CartCalculationOut, CartItemCreate, CartItemOut, CartItemUpdate
+from app.routers.vouchers import evaluate_voucher
+from app.schemas.cart import (
+    CartCalculationOut,
+    CartItemCreate,
+    CartItemOut,
+    CartItemUpdate,
+    CartPreviewRequest,
+)
 
 router = APIRouter(prefix="/cart", tags=["Cart"])
 
@@ -99,6 +107,190 @@ def _build_cart_item_out(ci: CartItem, dish: Optional[Dish]) -> CartItemOut:
         line_total=unit_price * ci.quantity,
         is_available=is_available,
         is_active=is_active,
+    )
+
+
+@router.get("/shipping-areas")
+def get_shipping_areas():
+    """Danh sách khu vực giao hàng và phí ship tương ứng (T3D262C)."""
+    return [{"area": k, "shipping_fee": v} for k, v in SHIPPING_AREA_FEES.items()]
+
+
+@router.get("", response_model=CartCalculationOut)
+def get_my_cart_and_calculate(
+    area: Optional[str] = Query("Nội thành"),
+    voucher_code: Optional[str] = Query(None),
+    expected_subtotal: Optional[int] = Query(None),
+    guest_token: Optional[str] = Query(None),
+    x_guest_token: Optional[str] = Header(None, alias="X-Guest-Token"),
+    db: Session = Depends(get_db),
+):
+    """API xem giỏ hàng và tính tiền tại server (T3D262C):
+    - Thành tiền từng dòng (giá món + tuỳ chọn) * số lượng.
+    - Tạm tính (subtotal), phí ship theo khu vực (module Tài khoản), giảm giá (module Khuyến mãi), tổng tiền.
+    - Cảnh báo khi món đã hết hàng, ngừng bán hoặc thay đổi giá.
+    """
+    tok = _resolve_guest_token(guest_token, x_guest_token)
+    cart = _get_or_create_active_cart(db, tok)
+
+    dish_ids = [ci.dish_id for ci in cart.items]
+    dishes = (
+        db.query(Dish)
+        .filter(Dish.id.in_(dish_ids))
+        .options(joinedload(Dish.category), joinedload(Dish.options))
+        .all()
+        if dish_ids
+        else []
+    )
+    dish_map = {d.id: d for d in dishes}
+
+    items_out: list[CartItemOut] = []
+    warnings: list[str] = []
+    subtotal = 0
+    has_unavailable = False
+
+    for ci in cart.items:
+        dish = dish_map.get(ci.dish_id)
+        dto = _build_cart_item_out(ci, dish)
+        items_out.append(dto)
+        if not dto.is_active:
+            has_unavailable = True
+            warnings.append(f"Món '{dto.dish_name}' đã ngừng kinh doanh (ẩn).")
+        elif not dto.is_available:
+            has_unavailable = True
+            warnings.append(f"Món '{dto.dish_name}' hiện đã hết món.")
+        else:
+            subtotal += dto.line_total
+
+    price_changed = False
+    if expected_subtotal is not None and expected_subtotal != subtotal:
+        price_changed = True
+        warnings.append(f"Giá món ăn trong giỏ đã thay đổi (tạm tính mới: {subtotal:,}đ).")
+
+    shipping_fee = calculate_shipping_fee(area) if subtotal > 0 else 0
+    discount_amount = 0
+    applied_code = None
+
+    if voucher_code and voucher_code.strip() and subtotal > 0:
+        v_obj, disc, v_msg = evaluate_voucher(db, voucher_code, subtotal)
+        if v_obj:
+            discount_amount = disc
+            applied_code = v_obj.code
+        else:
+            warnings.append(v_msg)
+
+    total_amount = max(0, subtotal + shipping_fee - discount_amount)
+
+    return CartCalculationOut(
+        cart_id=cart.id,
+        guest_token=tok,
+        items=items_out,
+        subtotal=subtotal,
+        area=area or "Nội thành",
+        shipping_fee=shipping_fee,
+        voucher_code=applied_code,
+        discount_amount=discount_amount,
+        total_amount=total_amount,
+        has_unavailable_item=has_unavailable,
+        price_changed=price_changed,
+        warnings=warnings,
+    )
+
+
+@router.post("/calculate", response_model=CartCalculationOut)
+def calculate_cart_preview(
+    req: CartPreviewRequest,
+    guest_token: Optional[str] = Query(None),
+    x_guest_token: Optional[str] = Header(None, alias="X-Guest-Token"),
+    db: Session = Depends(get_db),
+):
+    """API tính tiền giỏ hàng tại server từ danh sách món gửi lên hoặc từ giỏ DB (T3D262C)."""
+    if req.items is None:
+        return get_my_cart_and_calculate(
+            area=req.area,
+            voucher_code=req.voucher_code,
+            expected_subtotal=req.expected_subtotal,
+            guest_token=guest_token,
+            x_guest_token=x_guest_token,
+            db=db,
+        )
+
+    dish_ids = [it.dish_id for it in req.items]
+    dishes = (
+        db.query(Dish)
+        .filter(Dish.id.in_(dish_ids))
+        .options(joinedload(Dish.category), joinedload(Dish.options))
+        .all()
+        if dish_ids
+        else []
+    )
+    dish_map = {d.id: d for d in dishes}
+
+    items_out: list[CartItemOut] = []
+    warnings: list[str] = []
+    subtotal = 0
+    has_unavailable = False
+    price_changed = False
+
+    for idx, it in enumerate(req.items, start=1):
+        dish = dish_map.get(it.dish_id)
+        primary_opt, norm_json = _normalize_options(it.dish_option_id, it.selected_option_ids)
+        temp_ci = CartItem(
+            id=idx,
+            cart_id=0,
+            dish_id=it.dish_id,
+            dish_option_id=primary_opt,
+            selected_options_json=norm_json,
+            note=it.note,
+            quantity=it.quantity,
+        )
+        dto = _build_cart_item_out(temp_ci, dish)
+        items_out.append(dto)
+
+        if not dto.is_active:
+            has_unavailable = True
+            warnings.append(f"Món '{dto.dish_name}' đã ngừng kinh doanh.")
+        elif not dto.is_available:
+            has_unavailable = True
+            warnings.append(f"Món '{dto.dish_name}' hiện đã hết món.")
+        else:
+            subtotal += dto.line_total
+
+        if it.expected_unit_price is not None and it.expected_unit_price != dto.unit_price:
+            price_changed = True
+            warnings.append(f"Đơn giá món '{dto.dish_name}' đã thay đổi thành {dto.unit_price:,}đ.")
+
+    if req.expected_subtotal is not None and req.expected_subtotal != subtotal:
+        price_changed = True
+        warnings.append(f"Tạm tính giỏ hàng đã thay đổi thành {subtotal:,}đ.")
+
+    shipping_fee = calculate_shipping_fee(req.area) if subtotal > 0 else 0
+    discount_amount = 0
+    applied_code = None
+
+    if req.voucher_code and req.voucher_code.strip() and subtotal > 0:
+        v_obj, disc, v_msg = evaluate_voucher(db, req.voucher_code, subtotal)
+        if v_obj:
+            discount_amount = disc
+            applied_code = v_obj.code
+        else:
+            warnings.append(v_msg)
+
+    total_amount = max(0, subtotal + shipping_fee - discount_amount)
+
+    return CartCalculationOut(
+        cart_id=None,
+        guest_token=(guest_token or x_guest_token),
+        items=items_out,
+        subtotal=subtotal,
+        area=req.area or "Nội thành",
+        shipping_fee=shipping_fee,
+        voucher_code=applied_code,
+        discount_amount=discount_amount,
+        total_amount=total_amount,
+        has_unavailable_item=has_unavailable,
+        price_changed=price_changed,
+        warnings=warnings,
     )
 
 
