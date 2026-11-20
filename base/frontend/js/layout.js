@@ -51,14 +51,31 @@ function renderLayout() {
             <li><a href="${root}admin/login.html" style="color:var(--text-dim); font-size:0.85rem;">🔒 Quản trị</a></li>
           </ul>
 
-          <div class="nav-actions">
+          <div class="nav-actions" style="display:flex; align-items:center; gap:8px;">
             <a href="${root}cart.html" class="cart-btn" id="nav-cart-btn">
               <span>🛒 Giỏ hàng</span>
               <span class="cart-badge" id="nav-cart-badge">0</span>
             </a>
+            <button type="button" class="btn btn-secondary" id="btn-open-cart-drawer" style="padding:7px 11px; border-radius:999px; font-size:0.85rem;" title="Xem nhanh ngăn kéo giỏ hàng">
+              ⚡
+            </button>
           </div>
         </div>
       </nav>
+
+      <!-- Ngăn kéo giỏ hàng trượt trên mobile / Xem nhanh (T3D2887) -->
+      <div id="mobile-cart-drawer-overlay" class="cart-drawer-overlay"></div>
+      <aside id="mobile-cart-drawer" class="cart-drawer">
+        <div style="padding:16px 20px; border-bottom:1px solid var(--border-color); display:flex; justify-content:space-between; align-items:center;">
+          <h3 style="font-size:1.1rem; font-weight:800;">🛒 Giỏ Hàng Nhanh</h3>
+          <button type="button" id="btn-close-cart-drawer" class="modal-close-btn">&times;</button>
+        </div>
+        <div id="mobile-cart-drawer-body" style="padding:16px; flex:1; overflow-y:auto;"></div>
+        <div style="padding:16px 20px; border-top:1px solid var(--border-color); display:flex; gap:10px;">
+          <a href="${root}cart.html" class="btn btn-secondary" style="flex:1;">Mở Giỏ Hàng</a>
+          <a href="${root}checkout.html" class="btn btn-primary" style="flex:1;">Thanh Toán</a>
+        </div>
+      </aside>
     `;
   }
 
@@ -141,4 +158,50 @@ function updateCartBadge() {
     badge.textContent = count;
     badge.style.display = count > 0 ? "inline-block" : "none";
   }
+  renderMobileCartDrawer();
+}
+
+function renderMobileCartDrawer() {
+  const openBtn = document.getElementById("btn-open-cart-drawer");
+  const closeBtn = document.getElementById("btn-close-cart-drawer");
+  const overlay = document.getElementById("mobile-cart-drawer-overlay");
+  const drawer = document.getElementById("mobile-cart-drawer");
+  const bodyEl = document.getElementById("mobile-cart-drawer-body");
+
+  if (openBtn && drawer && overlay && !openBtn.dataset.bound) {
+    openBtn.dataset.bound = "1";
+    const closeFn = () => {
+      drawer.classList.remove("active");
+      overlay.classList.remove("active");
+    };
+    openBtn.addEventListener("click", () => {
+      renderMobileCartDrawer();
+      drawer.classList.add("active");
+      overlay.classList.add("active");
+    });
+    if (closeBtn) closeBtn.addEventListener("click", closeFn);
+    overlay.addEventListener("click", closeFn);
+  }
+
+  if (!bodyEl || typeof CartStorage === "undefined") return;
+  const items = CartStorage.getItems();
+  if (!items.length) {
+    bodyEl.innerHTML = `<div style="text-align:center; padding:40px 10px; color:var(--text-dim);">Giỏ hàng đang trống.</div>`;
+    return;
+  }
+
+  bodyEl.innerHTML = items.map((it, idx) => `
+    <div style="padding:10px 0; border-bottom:1px solid var(--border-subtle); display:flex; justify-content:space-between; align-items:center; gap:8px;">
+      <div>
+        <div style="font-weight:700; font-size:0.9rem;">Món #${it.dish_id} (SL: ${it.quantity})</div>
+        ${it.option_name ? `<div style="font-size:0.78rem; color:var(--accent-primary);">+ ${escapeHtml(it.option_name)}</div>` : ''}
+        ${it.note ? `<div style="font-size:0.75rem; color:var(--text-dim);">📝 ${escapeHtml(it.note)}</div>` : ''}
+      </div>
+      <div class="qty-control">
+        <button class="qty-btn" onclick="CartStorage.updateQuantityByIndex(${idx}, ${it.quantity - 1})">-</button>
+        <div class="qty-val">${it.quantity}</div>
+        <button class="qty-btn" onclick="CartStorage.updateQuantityByIndex(${idx}, ${it.quantity + 1})">+</button>
+      </div>
+    </div>
+  `).join("");
 }

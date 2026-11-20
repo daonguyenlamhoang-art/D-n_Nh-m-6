@@ -1,6 +1,4 @@
-// Logic Quản lý Giỏ hàng (FR-04, FR-05, TC-05..08, TC-27, TC-38)
-
-let verifiedDishes = {};
+// Logic Quản lý Giỏ hàng: Hiển thị tuỳ chọn, sửa ghi chú, tính tiền qua server & Mobile Drawer (T3D2887, T3D262C)
 
 document.addEventListener("DOMContentLoaded", async () => {
   await renderCart();
@@ -28,68 +26,80 @@ async function renderCart() {
     return;
   }
 
-  // Đối chiếu lại với dữ liệu hiện tại từ API theo yêu cầu FR-05
+  let calcData = null;
   try {
-    const ids = cartItems.map(it => it.dish_id).join(",");
-    const freshDishes = await api.get("/dishes", { ids });
-    verifiedDishes = {};
-    freshDishes.forEach(d => {
-      verifiedDishes[d.id] = d;
+    calcData = await api.post("/cart/calculate", {
+      items: cartItems.map(it => ({
+        dish_id: it.dish_id,
+        quantity: it.quantity,
+        dish_option_id: it.dish_option_id || null,
+        selected_option_ids: it.selected_option_ids || null,
+        note: it.note || null,
+      })),
+      area: "Nội thành",
     });
   } catch (err) {
-    console.warn("Không thể tải thông tin món mới nhất:", err);
+    console.warn("Không thể gọi API tính tiền giỏ hàng:", err);
   }
 
-  let totalAmount = 0;
-  let hasUnavailableItem = false;
+  const defaultImg = "https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=500&auto=format&fit=crop&q=60";
+  const serverItems = (calcData && calcData.items) ? calcData.items : [];
+  const totalAmount = calcData ? calcData.subtotal : 0;
+  const hasUnavailableItem = calcData ? calcData.has_unavailable_item : false;
+  const warnings = (calcData && calcData.warnings) ? calcData.warnings : [];
 
-  const tableRows = cartItems.map(it => {
-    const dish = verifiedDishes[it.dish_id];
-    const defaultImg = "https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=500&auto=format&fit=crop&q=60";
-
-    if (!dish) {
-      hasUnavailableItem = true;
+  const tableRows = cartItems.map((it, idx) => {
+    const sItem = serverItems[idx];
+    if (!sItem || !sItem.is_active) {
       return `
         <tr>
           <td colspan="4" style="color:var(--danger);">
             ⚠️ Món ăn (ID=${it.dish_id}) không còn kinh doanh hoặc đã bị ẩn. Vui lòng xóa khỏi giỏ.
           </td>
           <td>
-            <button class="btn btn-danger" style="padding:4px 8px; font-size:0.8rem;" onclick="CartStorage.removeItem(${it.dish_id})">Xóa</button>
+            <button class="btn btn-danger" style="padding:4px 8px; font-size:0.8rem;" onclick="CartStorage.removeItemByIndex(${idx})">Xóa</button>
           </td>
         </tr>
       `;
     }
 
-    const isAvailable = dish.is_available;
-    if (!isAvailable) {
-      hasUnavailableItem = true;
-    }
-
-    const unitPrice = dish.price;
-    const itemSubtotal = unitPrice * it.quantity;
-    totalAmount += itemSubtotal;
+    const optDisplay = sItem.option_name || it.option_name || "";
 
     return `
       <tr>
-        <td style="display:flex; align-items:center; gap:14px;">
-          <img src="${dish.image_url || defaultImg}" alt="${escapeHtml(dish.name)}" style="width:60px; height:60px; object-fit:cover; border-radius:var(--radius-sm);" onerror="this.src='${defaultImg}'">
-          <div>
-            <div style="font-weight:700; color:var(--text-main); font-size:1rem;">${escapeHtml(dish.name)}</div>
-            ${!isAvailable ? '<span style="color:#ef4444; font-size:0.8rem; font-weight:700;">[HẾT HÀNG - CẦN XÓA HOẶC ĐỔI MÓN]</span>' : ''}
+        <td>
+          <div style="display:flex; align-items:flex-start; gap:14px;">
+            <img src="${sItem.image_url || defaultImg}" alt="${escapeHtml(sItem.dish_name)}" style="width:64px; height:64px; object-fit:cover; border-radius:var(--radius-sm);" onerror="this.src='${defaultImg}'">
+            <div style="flex:1;">
+              <div style="font-weight:700; color:var(--text-main); font-size:1rem;">${escapeHtml(sItem.dish_name)}</div>
+              ${optDisplay ? `<div style="color:var(--accent-primary); font-size:0.82rem; font-weight:600; margin-top:2px;">+ Tuỳ chọn: ${escapeHtml(optDisplay)}</div>` : ''}
+              ${!sItem.is_available ? '<div style="color:#ef4444; font-size:0.8rem; font-weight:700; margin-top:2px;">[HẾT HÀNG - CẦN XÓA HOẶC ĐỔI MÓN]</div>' : ''}
+              <div style="margin-top:8px; display:flex; align-items:center; gap:6px;">
+                <input 
+                  type="text" 
+                  class="form-control" 
+                  placeholder="Ghi chú món (VD: Ít cay, không hành...)" 
+                  value="${escapeHtml(it.note || '')}" 
+                  style="padding:5px 10px; font-size:0.8rem; max-width:240px;"
+                  onchange="CartStorage.updateNoteByIndex(${idx}, this.value)">
+              </div>
+            </div>
           </div>
         </td>
-        <td style="color:var(--accent-secondary); font-weight:700;">${formatVND(unitPrice)}</td>
+        <td style="color:var(--accent-secondary); font-weight:700;">
+          ${formatVND(sItem.unit_price)}
+          ${sItem.option_extra_price > 0 ? `<div style="font-size:0.75rem; color:var(--text-dim);">(Gốc ${formatVND(sItem.base_price)} + ${formatVND(sItem.option_extra_price)})</div>` : ''}
+        </td>
         <td>
           <div class="qty-control">
-            <button class="qty-btn" onclick="adjustItemQty(${it.dish_id}, ${it.quantity - 1})">-</button>
+            <button class="qty-btn" onclick="adjustCartLineQty(${idx}, ${it.quantity - 1})">-</button>
             <div class="qty-val">${it.quantity}</div>
-            <button class="qty-btn" onclick="adjustItemQty(${it.dish_id}, ${it.quantity + 1})">+</button>
+            <button class="qty-btn" onclick="adjustCartLineQty(${idx}, ${it.quantity + 1})">+</button>
           </div>
         </td>
-        <td style="color:var(--accent-secondary); font-weight:800;">${formatVND(itemSubtotal)}</td>
+        <td style="color:var(--accent-secondary); font-weight:800;">${formatVND(sItem.line_total)}</td>
         <td>
-          <button class="btn btn-danger" style="padding:6px 10px; font-size:0.8rem;" onclick="CartStorage.removeItem(${it.dish_id})">🗑️ Xóa</button>
+          <button class="btn btn-danger" style="padding:6px 10px; font-size:0.8rem;" onclick="CartStorage.removeItemByIndex(${idx})">🗑️ Xóa</button>
         </td>
       </tr>
     `;
@@ -97,13 +107,13 @@ async function renderCart() {
 
   container.innerHTML = `
     <div style="display:grid; grid-template-columns: 2fr 1fr; gap:24px;">
-      <!-- Danh sách món -->
+      <!-- Danh sách món kèm tuỳ chọn và ghi chú -->
       <div class="card-panel" style="padding:20px;">
         <div class="table-responsive">
           <table class="data-table">
             <thead>
               <tr>
-                <th>Món ăn</th>
+                <th>Món ăn & Tuỳ chọn / Ghi chú</th>
                 <th>Đơn giá</th>
                 <th>Số lượng</th>
                 <th>Thành tiền</th>
@@ -124,21 +134,21 @@ async function renderCart() {
             Hóa Đơn Tạm Tính
           </h3>
           <div style="display:flex; justify-content:space-between; margin-bottom:10px; color:var(--text-muted);">
-            <span>Tạm tính món:</span>
+            <span>Tạm tính (${CartStorage.getTotalCount()} món):</span>
             <span style="font-weight:600; color:var(--text-main);">${formatVND(totalAmount)}</span>
           </div>
           <div style="display:flex; justify-content:space-between; margin-bottom:14px; color:var(--text-muted);">
             <span>Phí giao hàng đêm:</span>
-            <span style="color:#4ade80; font-weight:600;">Miễn phí (COD)</span>
+            <span style="color:#4ade80; font-weight:600;">Tính theo khu vực ở bước sau</span>
           </div>
           <div style="display:flex; justify-content:space-between; padding-top:14px; border-top:1px solid var(--border-color); font-size:1.25rem; font-weight:800; color:var(--accent-secondary); margin-bottom:20px;">
-            <span>Tổng cộng:</span>
+            <span>Tạm tính:</span>
             <span>${formatVND(totalAmount)}</span>
           </div>
 
-          ${hasUnavailableItem ? `
+          ${warnings.length > 0 ? `
             <div style="background-color:rgba(239,68,68,0.15); border:1px solid rgba(239,68,68,0.3); color:#f87171; padding:12px; border-radius:var(--radius-sm); font-size:0.85rem; margin-bottom:16px;">
-              ⚠️ Trong giỏ có món đã hết hàng hoặc ngừng bán. Vui lòng xóa món đó trước khi tiếp tục.
+              ${warnings.map(w => `<div>⚠️ ${escapeHtml(w)}</div>`).join("")}
             </div>
           ` : ''}
 
@@ -147,7 +157,7 @@ async function renderCart() {
             class="btn btn-primary" 
             style="width:100%; padding:14px; font-size:1.05rem;"
             ${hasUnavailableItem ? 'disabled style="opacity:0.5; pointer-events:none;"' : ''}>
-            👉 Tiến Hành Đặt Hàng
+            👉 Tiến Hành Thanh Toán
           </a>
 
           <div style="text-align:center; margin-top:12px;">
@@ -159,12 +169,12 @@ async function renderCart() {
   `;
 }
 
-function adjustItemQty(dishId, newQty) {
+function adjustCartLineQty(index, newQty) {
   if (newQty <= 0) {
-    CartStorage.removeItem(dishId);
+    CartStorage.removeItemByIndex(index);
   } else if (newQty > 99) {
     showToast("Số lượng mỗi món tối đa là 99", "warning");
   } else {
-    CartStorage.updateQuantity(dishId, newQty);
+    CartStorage.updateQuantityByIndex(index, newQty);
   }
 }
