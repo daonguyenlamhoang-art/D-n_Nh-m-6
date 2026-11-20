@@ -10,9 +10,11 @@ from app.db.session import get_db
 from app.models.category import Category
 from app.models.dish import Dish, DishOption
 from app.models.order import Order, OrderItem, OrderStatusHistory
+from app.models.voucher import Voucher
 from app.routers.store import check_is_store_open
 from app.routers.vouchers import evaluate_voucher
 from app.schemas.order import (
+    OrderCancelRequest,
     OrderCreate,
     OrderItemOut,
     OrderLookupOut,
@@ -345,6 +347,74 @@ def track_my_order(
             detail={"code": "FORBIDDEN_ORDER", "message": "Bạn chỉ có quyền xem đơn hàng của chính mình", "details": {}},
         )
 
+    return _build_order_lookup_out(order)
+
+
+@router.post("/{order_code}/cancel", response_model=OrderLookupOut)
+def customer_cancel_order(
+    order_code: str,
+    cancel_in: OrderCancelRequest,
+    x_guest_token: Optional[str] = Header(None, alias="X-Guest-Token"),
+    db: Session = Depends(get_db),
+):
+    """Khách hàng huỷ đơn: chỉ cho phép khi đơn còn ở trạng thái 'Chờ xác nhận' (pending) và ghi lịch sử (T3D2909)."""
+    code_clean = order_code.strip().upper()
+    eff_token = (cancel_in.guest_token or x_guest_token or "").strip()
+    eff_phone = (cancel_in.phone or "").strip()
+
+    order = (
+        db.query(Order)
+        .filter(Order.order_code == code_clean)
+        .options(joinedload(Order.items), joinedload(Order.status_histories))
+        .first()
+    )
+    if not order:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail={"code": "ORDER_NOT_FOUND", "message": "Không tìm thấy đơn hàng", "details": {}},
+        )
+
+    is_owner = False
+    if eff_phone and order.phone == eff_phone:
+        is_owner = True
+    if eff_token and order.guest_token and order.guest_token == eff_token:
+        is_owner = True
+
+    if not is_owner:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail={"code": "FORBIDDEN_ORDER", "message": "Bạn chỉ có thể huỷ đơn hàng của chính mình", "details": {}},
+        )
+
+    if order.status != "pending":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={
+                "code": "CANNOT_CANCEL_ORDER",
+                "message": f"Không thể huỷ đơn hàng ở trạng thái '{STATUS_MAP.get(order.status, order.status)}'. Khách chỉ được huỷ khi đơn còn 'Chờ xác nhận'.",
+                "details": {"current_status": order.status},
+            },
+        )
+
+    old_st = order.status
+    order.status = "cancelled"
+    reason_text = (cancel_in.reason or "Khách yêu cầu huỷ đơn").strip()
+
+    if order.voucher_id:
+        voucher = db.query(Voucher).filter(Voucher.id == order.voucher_id).first()
+        if voucher and (voucher.used_count or 0) > 0:
+            voucher.used_count -= 1
+
+    history = OrderStatusHistory(
+        order_id=order.id,
+        changed_by=None,
+        old_status=old_st,
+        new_status="cancelled",
+        note=f"Khách huỷ đơn: {reason_text}",
+    )
+    db.add(history)
+    db.commit()
+    db.refresh(order)
     return _build_order_lookup_out(order)
 
 
