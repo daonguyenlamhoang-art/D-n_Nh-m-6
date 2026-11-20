@@ -24,7 +24,7 @@ from app.models.dish import Dish
 from app.models.order import Order, OrderStatusHistory
 from app.models.user import User
 from app.schemas.admin import AdminLoginRequest, AdminUserOut, DashboardStatsOut
-from app.schemas.category import CategoryCreate, CategoryOut, CategoryUpdate
+from app.schemas.category import CategoryCreate, CategoryOut, CategoryReorderItem, CategoryUpdate
 from app.schemas.dish import DishCreate, DishOut, DishUpdate
 from app.schemas.order import OrderOut, OrderStatusUpdate
 
@@ -276,14 +276,25 @@ def admin_update_dish(
     return dto
 
 
-# ----------------- QUẢN LÝ DANH MỤC (FR-10) -----------------
+# ----------------- QUẢN LÝ DANH MỤC (FR-10, T3D1F9B) -----------------
 @router.get("/categories", response_model=list[CategoryOut])
 def admin_get_categories(
     db: Session = Depends(get_db),
     current_admin: User = Depends(get_current_admin),
 ):
-    """Xem danh sách toàn bộ danh mục kể cả danh mục đã ẩn (FR-10)."""
-    return db.query(Category).order_by(Category.id.asc()).all()
+    """Xem danh sách toàn bộ danh mục kể cả danh mục đã ẩn, sắp theo sort_order (FR-10, T3D1F9B)."""
+    cats = db.query(Category).order_by(Category.sort_order.asc(), Category.id.asc()).all()
+    counts = dict(
+        db.query(Dish.category_id, func.count(Dish.id))
+        .group_by(Dish.category_id)
+        .all()
+    )
+    result = []
+    for c in cats:
+        dto = CategoryOut.model_validate(c)
+        dto.dish_count = counts.get(c.id, 0)
+        result.append(dto)
+    return result
 
 
 @router.post("/categories", response_model=CategoryOut, status_code=status.HTTP_201_CREATED)
@@ -292,7 +303,7 @@ def admin_create_category(
     db: Session = Depends(get_db),
     current_admin: User = Depends(get_current_admin),
 ):
-    """Thêm danh mục mới (FR-10)."""
+    """Thêm danh mục mới kèm thứ tự hiển thị (FR-10, T3D1F9B)."""
     name_clean = cat_in.name.strip()
     exists = db.query(Category).filter(Category.name == name_clean).first()
     if exists:
@@ -301,11 +312,34 @@ def admin_create_category(
             detail={"code": "CATEGORY_EXISTS", "message": "Tên danh mục đã tồn tại", "details": {}},
         )
 
-    new_cat = Category(name=name_clean, is_active=cat_in.is_active)
+    sort_order = cat_in.sort_order
+    if sort_order <= 0:
+        max_sort = db.query(func.max(Category.sort_order)).scalar() or 0
+        sort_order = max_sort + 1
+
+    new_cat = Category(name=name_clean, sort_order=sort_order, is_active=cat_in.is_active)
     db.add(new_cat)
     db.commit()
     db.refresh(new_cat)
-    return new_cat
+    dto = CategoryOut.model_validate(new_cat)
+    dto.dish_count = 0
+    return dto
+
+
+@router.patch("/categories/reorder", response_model=list[CategoryOut])
+def admin_reorder_categories(
+    items: list[CategoryReorderItem],
+    db: Session = Depends(get_db),
+    current_admin: User = Depends(get_current_admin),
+):
+    """Sắp xếp lại thứ tự các danh mục (T3D1F9B)."""
+    id_map = {item.id: item.sort_order for item in items}
+    if id_map:
+        cats = db.query(Category).filter(Category.id.in_(list(id_map.keys()))).all()
+        for c in cats:
+            c.sort_order = id_map[c.id]
+        db.commit()
+    return admin_get_categories(db=db, current_admin=current_admin)
 
 
 @router.put("/categories/{cat_id}", response_model=CategoryOut)
@@ -315,7 +349,7 @@ def admin_update_category(
     db: Session = Depends(get_db),
     current_admin: User = Depends(get_current_admin),
 ):
-    """Sửa tên hoặc ẩn danh mục (soft delete) (FR-10)."""
+    """Sửa tên, thứ tự hoặc ẩn/hiện danh mục (FR-10, T3D1F9B)."""
     cat = db.query(Category).filter(Category.id == cat_id).first()
     if not cat:
         raise HTTPException(
@@ -333,12 +367,47 @@ def admin_update_category(
             )
         cat.name = name_clean
 
+    if cat_in.sort_order is not None:
+        cat.sort_order = cat_in.sort_order
+
     if cat_in.is_active is not None:
         cat.is_active = cat_in.is_active
 
     db.commit()
     db.refresh(cat)
-    return cat
+    dto = CategoryOut.model_validate(cat)
+    dto.dish_count = db.query(func.count(Dish.id)).filter(Dish.category_id == cat.id).scalar() or 0
+    return dto
+
+
+@router.delete("/categories/{cat_id}")
+def admin_delete_category(
+    cat_id: int,
+    db: Session = Depends(get_db),
+    current_admin: User = Depends(get_current_admin),
+):
+    """Xoá danh mục: chặn không cho xoá khi danh mục vẫn còn món ăn (T3D1F9B)."""
+    cat = db.query(Category).filter(Category.id == cat_id).first()
+    if not cat:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail={"code": "CATEGORY_NOT_FOUND", "message": "Không tìm thấy danh mục", "details": {}},
+        )
+
+    dish_count = db.query(func.count(Dish.id)).filter(Dish.category_id == cat_id).scalar() or 0
+    if dish_count > 0:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={
+                "code": "CATEGORY_HAS_DISHES",
+                "message": f"Không thể xoá danh mục '{cat.name}' vì đang có {dish_count} món ăn thuộc danh mục này. Vui lòng ẩn danh mục hoặc chuyển món sang danh mục khác.",
+                "details": {"dish_count": dish_count},
+            },
+        )
+
+    db.delete(cat)
+    db.commit()
+    return {"message": f"Đã xoá danh mục '{cat.name}' thành công"}
 
 
 # ----------------- QUẢN LÝ ĐƠN HÀNG (FR-11, FR-12) -----------------
