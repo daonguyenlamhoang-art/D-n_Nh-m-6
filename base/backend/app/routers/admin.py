@@ -5,7 +5,7 @@ import time
 import uuid
 from datetime import datetime
 from typing import Optional
-from fastapi import APIRouter, Depends, File, HTTPException, Query, Request, Response, UploadFile, status
+from fastapi import APIRouter, BackgroundTasks, Depends, File, HTTPException, Query, Request, Response, UploadFile, status
 from pydantic import BaseModel, Field
 from sqlalchemy import func
 from sqlalchemy.orm import Session, joinedload
@@ -19,6 +19,7 @@ from app.core.auth import (
     verify_password,
     SESSION_COOKIE_NAME,
 )
+from app.core.email_service import get_sent_email_logs, send_order_notification_email
 from app.core.rate_limit import (
     check_admin_login_rate_limit,
     record_admin_login_failure,
@@ -936,6 +937,7 @@ def admin_get_order_detail(
 def admin_update_order_status(
     order_id: int,
     update_in: OrderStatusUpdate,
+    background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
     current_admin: User = Depends(get_current_admin),
 ):
@@ -996,7 +998,22 @@ def admin_update_order_status(
 
     db.commit()
     db.refresh(order)
+    background_tasks.add_task(
+        send_order_notification_email,
+        order.customer_email,
+        order.order_code,
+        order.customer_name,
+        order.status,
+        order.total_amount,
+        "STATUS_CHANGED",
+    )
     return OrderOut.model_validate(order)
+
+
+@router.get("/email-logs")
+def admin_get_email_logs(current_admin: User = Depends(get_current_admin)):
+    """Xem nhật ký email xác nhận đơn hàng đã chạy qua FastAPI BackgroundTasks (T3D2F7B)."""
+    return {"items": get_sent_email_logs()}
 
 
 @router.post("/orders/{order_id}/cancel", response_model=OrderOut)
@@ -1064,6 +1081,7 @@ def admin_cancel_order_with_reason(
 @router.post("/orders/{order_id}/confirm-payment", response_model=OrderOut)
 def admin_confirm_qr_payment(
     order_id: int,
+    background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
     current_admin: User = Depends(get_current_admin),
 ):
@@ -1095,4 +1113,13 @@ def admin_confirm_qr_payment(
 
     db.commit()
     db.refresh(order)
+    background_tasks.add_task(
+        send_order_notification_email,
+        order.customer_email,
+        order.order_code,
+        order.customer_name,
+        order.status,
+        order.total_amount,
+        "STATUS_CHANGED",
+    )
     return OrderOut.model_validate(order)

@@ -27,6 +27,13 @@ class Settings(BaseSettings):
     SECRET_KEY: str = "nightfood-secret-key-super-secure-jwt-session-2026"
     SESSION_EXPIRE_HOURS: int = 8
 
+    # Cấu hình SMTP gửi email xác nhận đơn hàng (Gmail App Password - T3D2F7B)
+    SMTP_HOST: str = "smtp.gmail.com"
+    SMTP_PORT: int = 587
+    SMTP_USER: str = ""
+    SMTP_APP_PASSWORD: str = ""
+    SMTP_FROM_EMAIL: str = "noreply@nightfood.vn"
+
     @property
     def database_url(self) -> str:
         return (
