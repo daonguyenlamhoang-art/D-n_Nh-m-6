@@ -401,6 +401,47 @@ def admin_delete_or_hide_dish(
     }
 
 
+@router.patch("/dishes/{dish_id}/availability", response_model=DishOut)
+def admin_quick_toggle_availability(
+    dish_id: int,
+    is_available: Optional[bool] = Query(None),
+    db: Session = Depends(get_db),
+    current_admin: User = Depends(get_current_admin),
+):
+    """Nhân viên bật/tắt báo hết món nhanh trong ngày (món hết không đặt được) (T3D228F)."""
+    dish = db.query(Dish).filter(Dish.id == dish_id).options(joinedload(Dish.category), joinedload(Dish.options)).first()
+    if not dish:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail={"code": "DISH_NOT_FOUND", "message": "Không tìm thấy món ăn", "details": {}},
+        )
+    dish.is_available = (not dish.is_available) if is_available is None else is_available
+    dish.sync_status_flags()
+    db.commit()
+    db.refresh(dish)
+    return enrich_dishes_list(db, [dish])[0]
+
+
+@router.patch("/dishes/{dish_id}/featured", response_model=DishOut)
+def admin_quick_toggle_featured(
+    dish_id: int,
+    is_featured: Optional[bool] = Query(None),
+    db: Session = Depends(get_db),
+    current_admin: User = Depends(get_current_admin),
+):
+    """Nhân viên đánh dấu / bỏ đánh dấu món nổi bật cho trang chủ (T3D228F)."""
+    dish = db.query(Dish).filter(Dish.id == dish_id).options(joinedload(Dish.category), joinedload(Dish.options)).first()
+    if not dish:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail={"code": "DISH_NOT_FOUND", "message": "Không tìm thấy món ăn", "details": {}},
+        )
+    dish.is_featured = (not dish.is_featured) if is_featured is None else is_featured
+    db.commit()
+    db.refresh(dish)
+    return enrich_dishes_list(db, [dish])[0]
+
+
 @router.post("/dishes/{dish_id}/options", response_model=DishOptionOut, status_code=status.HTTP_201_CREATED)
 def admin_add_dish_option(
     dish_id: int,

@@ -340,8 +340,8 @@
 
     async function toggleAvailability(id, newStatus) {
       try {
-        await api.put(`/admin/dishes/${id}`, { is_available: newStatus });
-        showToast("Đã cập nhật trạng thái còn món", "success");
+        await api.patch(`/admin/dishes/${id}/availability?is_available=${newStatus}`);
+        showToast(newStatus ? "Đã bật mở bán món ăn" : "Đã báo hết món nhanh trong ngày", "success");
         await loadDishes();
       } catch (err) {
         showToast("Lỗi: " + err.message, "error");
@@ -360,7 +360,7 @@
 
     async function toggleFeatured(id, newFeatured) {
       try {
-        await api.put(`/admin/dishes/${id}`, { is_featured: newFeatured });
+        await api.patch(`/admin/dishes/${id}/featured?is_featured=${newFeatured}`);
         showToast(newFeatured ? "Đã đánh dấu món nổi bật ⭐" : "Đã bỏ đánh dấu nổi bật", "success");
         await loadDishes();
       } catch (err) {
