@@ -1,12 +1,17 @@
 """Router Đơn hàng & Tra cứu đơn cho khách hàng (FR-06, FR-07, BR-01..18, TC-09..13, TC-23..24, TC-27..31, TC-33, TC-39)."""
+import json
 import random
+import re
 import time
 from typing import Optional
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request, status
 from sqlalchemy.orm import Session, joinedload
 
+from app.core.auth import calculate_shipping_fee
+from app.core.config import settings
 from app.core.rate_limit import check_order_lookup_rate_limit, record_order_lookup_failure
 from app.db.session import get_db
+from app.models.cart import Cart, CartItem
 from app.models.category import Category
 from app.models.dish import Dish, DishOption
 from app.models.order import Order, OrderItem, OrderStatusHistory
@@ -23,6 +28,42 @@ from app.schemas.order import (
 )
 
 router = APIRouter(prefix="/orders", tags=["Orders"])
+
+# Bộ nhớ chống bấm đặt món 2 lần liên tiếp (Double-submit protection - T3D286D)
+_recent_order_locks: dict[str, float] = {}
+
+
+def validate_desired_delivery_time(desired_time: Optional[str]) -> None:
+    """Kiểm tra giờ giao mong muốn phải nằm trong khung giờ mở cửa (18:00 - 02:00) (T3D286D)."""
+    if not desired_time:
+        return
+    clean = desired_time.strip()
+    if not clean or clean.lower() in ("ngay", "giao ngay", "immediate", "asap"):
+        return
+
+    match = re.search(r"(\d{1,2}):(\d{2})", clean)
+    if match:
+        hour = int(match.group(1))
+        minute = int(match.group(2))
+        if hour > 23 or minute > 59:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail={"code": "INVALID_DELIVERY_TIME", "message": "Định dạng giờ giao không hợp lệ", "details": {}},
+            )
+        in_open_window = (
+            hour >= settings.STORE_OPEN_HOUR
+            or hour < settings.STORE_CLOSE_HOUR
+            or (hour == settings.STORE_CLOSE_HOUR and minute == 0)
+        )
+        if not in_open_window:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail={
+                    "code": "DELIVERY_TIME_OUTSIDE_HOURS",
+                    "message": f"Giờ giao mong muốn ({clean}) nằm ngoài khung giờ mở cửa của quán (18:00 - 02:00).",
+                    "details": {"open_hour": settings.STORE_OPEN_HOUR, "close_hour": settings.STORE_CLOSE_HOUR},
+                },
+            )
 
 STATUS_MAP = {
     "pending": "Chờ xác nhận",
@@ -57,10 +98,11 @@ def generate_unique_order_code(db: Session) -> str:
 def create_order(
     order_in: OrderCreate,
     x_guest_token: Optional[str] = Header(None, alias="X-Guest-Token"),
+    x_idempotency_key: Optional[str] = Header(None, alias="X-Idempotency-Key"),
     db: Session = Depends(get_db),
 ):
-    """Đặt hàng trực tuyến (FR-06, BR-01..07, BR-14, BR-17)."""
-    # 1. Kiểm tra giờ mở cửa (FR-14, TC-39)
+    """Đặt hàng trực tuyến trong 1 transaction: kiểm tra món còn bán, lưu snapshot giá & tuỳ chọn, xoá giỏ, chống bấm 2 lần (T3D286D)."""
+    # 1. Kiểm tra giờ mở cửa (FR-14, TC-39) và giờ giao mong muốn (T3D286D)
     is_open, status_text, _ = check_is_store_open()
     if not is_open:
         raise HTTPException(
@@ -72,6 +114,8 @@ def create_order(
             },
         )
 
+    validate_desired_delivery_time(order_in.desired_delivery_time)
+
     # 2. Kiểm tra danh sách món không được rỗng
     if not order_in.items:
         raise HTTPException(
@@ -79,14 +123,35 @@ def create_order(
             detail={"code": "EMPTY_CART", "message": "Giỏ hàng không có sản phẩm nào", "details": {}},
         )
 
+    # 2b. Chống bấm đặt hàng 2 lần liên tiếp (Idempotency Key)
+    if x_idempotency_key:
+        now_ts = time.time()
+        last_ts = _recent_order_locks.get(x_idempotency_key)
+        if last_ts and (now_ts - last_ts) < 30.0:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail={
+                    "code": "DUPLICATE_ORDER_SUBMISSION",
+                    "message": "Đơn hàng đang được xử lý, vui lòng không bấm đặt món 2 lần.",
+                    "details": {},
+                },
+            )
+        _recent_order_locks[x_idempotency_key] = now_ts
+
     # 3. Gom và kiểm tra các món
-    dish_ids = [item.dish_id for item in order_in.items]
-    if len(dish_ids) != len(set(dish_ids)):
+    line_signatures = []
+    for item in order_in.items:
+        opt_tuple = tuple(sorted(item.selected_option_ids or ([item.dish_option_id] if item.dish_option_id else [])))
+        note_norm = (item.note or "").strip()
+        line_signatures.append((item.dish_id, opt_tuple, note_norm))
+
+    if len(line_signatures) != len(set(line_signatures)):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail={"code": "DUPLICATE_ITEMS", "message": "Giỏ hàng có món bị lặp lại, vui lòng kiểm tra lại", "details": {}},
+            detail={"code": "DUPLICATE_ITEMS", "message": "Giỏ hàng có dòng món bị lặp lại, vui lòng kiểm tra lại", "details": {}},
         )
 
+    dish_ids = list({item.dish_id for item in order_in.items})
     dishes_db = (
         db.query(Dish)
         .join(Category, Dish.category_id == Category.id)
@@ -115,36 +180,43 @@ def create_order(
             )
 
         # Kiểm tra trạng thái món và danh mục (BR-06, BR-16, TC-12, TC-30)
-        if not dish.is_active or not dish.category.is_active:
+        if not dish.is_active or not dish.category.is_active or dish.status == "HIDDEN":
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail={"code": "DISH_INACTIVE", "message": f"Món '{dish.name}' đã ngừng kinh doanh hoặc danh mục bị ẩn", "details": {}},
             )
 
-        if not dish.is_available:
+        if not dish.is_available or dish.status == "OUT_OF_STOCK":
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail={"code": "DISH_OUT_OF_STOCK", "message": f"Món '{dish.name}' hiện đã hết hàng", "details": {}},
             )
 
-        # Tính đơn giá thực tế từ DB
+        # Tính đơn giá thực tế từ DB (cộng tất cả tuỳ chọn đã chọn)
         unit_price = dish.price
-        option_name = None
+        opt_ids = sorted(set(item.selected_option_ids or ([item.dish_option_id] if item.dish_option_id else [])))
+        opt_names = []
+        opt_snapshots = []
 
-        if item.dish_option_id:
-            opt = next((o for o in dish.options if o.id == item.dish_option_id and o.is_active), None)
+        for oid in opt_ids:
+            opt = next((o for o in dish.options if o.id == oid and o.is_active), None)
             if opt:
                 unit_price += opt.extra_price
-                option_name = opt.option_name
+                opt_names.append(opt.option_name)
+                opt_snapshots.append({"id": opt.id, "group": opt.option_group, "name": opt.option_name, "extra_price": opt.extra_price})
 
+        option_name = ", ".join(opt_names) if opt_names else None
+        primary_opt_id = opt_ids[0] if opt_ids else None
         item_subtotal = unit_price * item.quantity
         calculated_total += item_subtotal
 
         items_to_save.append({
             "dish_id": dish.id,
-            "dish_option_id": item.dish_option_id,
+            "dish_option_id": primary_opt_id,
             "dish_name": dish.name,
             "option_name": option_name,
+            "options_json": json.dumps(opt_snapshots, ensure_ascii=False) if opt_snapshots else None,
+            "note": (item.note or "").strip() or None,
             "quantity": item.quantity,
             "unit_price": unit_price,
             "subtotal": item_subtotal,
@@ -156,7 +228,8 @@ def create_order(
             "quantity": item.quantity,
         })
 
-    # 4. Kiểm tra mã giảm giá nếu có (T3D2A5B)
+    # 4. Kiểm tra mã giảm giá và phí ship theo khu vực
+    shipping_fee = calculate_shipping_fee(order_in.area)
     applied_voucher = None
     discount_amount = 0
     if order_in.voucher_code:
@@ -167,10 +240,14 @@ def create_order(
                 detail={"code": "INVALID_VOUCHER", "message": v_msg, "details": {}},
             )
 
-    final_total = max(0, calculated_total - discount_amount)
+    final_total = max(0, calculated_total + shipping_fee - discount_amount)
 
     # 4b. Kiểm tra giá thay đổi lúc đặt hàng (BR-05, BR-17, TC-29)
-    if order_in.expected_total is not None and order_in.expected_total not in (calculated_total, final_total):
+    if order_in.expected_total is not None and order_in.expected_total not in (
+        calculated_total,
+        calculated_total - discount_amount,
+        final_total,
+    ):
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail={
@@ -183,10 +260,10 @@ def create_order(
             },
         )
 
-    # 5. Lưu đơn trong transaction cơ sở dữ liệu (BR-14, TC-09, TC-26)
+    # 5. Lưu đơn + chi tiết + trừ voucher + xoá giỏ trong 1 transaction cơ sở dữ liệu (T3D286D)
     try:
         order_code = generate_unique_order_code(db)
-        guest_tok = order_in.guest_token or x_guest_token
+        guest_tok = (order_in.guest_token or x_guest_token or "").strip() or None
         new_order = Order(
             order_code=order_code,
             guest_token=guest_tok,
@@ -197,9 +274,9 @@ def create_order(
             address=order_in.address,
             area=order_in.area or "Nội thành",
             note=order_in.note,
-            desired_delivery_time=order_in.desired_delivery_time,
+            desired_delivery_time=order_in.desired_delivery_time or "Giao ngay",
             subtotal=calculated_total,
-            shipping_fee=0,
+            shipping_fee=shipping_fee,
             discount_amount=discount_amount,
             total_amount=final_total,
             payment_method=order_in.payment_method or "COD",
@@ -217,28 +294,42 @@ def create_order(
                 dish_option_id=it["dish_option_id"],
                 dish_name=it["dish_name"],
                 option_name=it["option_name"],
+                options_json=it["options_json"],
+                note=it["note"],
                 quantity=it["quantity"],
                 unit_price=it["unit_price"],
                 subtotal=it["subtotal"],
             )
             db.add(order_item)
 
-        # Lưu lịch sử trạng thái ban đầu
+        # Lưu lịch sử trạng thái ban đầu: Chờ xác nhận (pending)
         history = OrderStatusHistory(
             order_id=new_order.id,
             old_status=None,
             new_status="pending",
-            note="Khách đặt hàng trực tuyến (COD)",
+            note=f"Khách đặt hàng trực tuyến ({new_order.payment_method})",
         )
         db.add(history)
+
+        # Xoá giỏ hàng DB của khách trong cùng 1 transaction (T3D286D)
+        if guest_tok:
+            active_carts = db.query(Cart).filter(Cart.guest_token == guest_tok, Cart.status == "active").all()
+            for c in active_carts:
+                db.query(CartItem).filter(CartItem.cart_id == c.id).delete()
+                c.status = "checked_out"
 
         db.commit()
         db.refresh(new_order)
 
         return {
+            "id": new_order.id,
             "order_code": new_order.order_code,
+            "subtotal": new_order.subtotal,
+            "shipping_fee": new_order.shipping_fee,
+            "discount_amount": new_order.discount_amount,
             "total_amount": new_order.total_amount,
-            "payment_method": "COD",
+            "payment_method": new_order.payment_method,
+            "desired_delivery_time": new_order.desired_delivery_time,
             "status": "pending",
             "message": "Đặt hàng thành công",
         }
