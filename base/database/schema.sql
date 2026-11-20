@@ -210,12 +210,18 @@ CREATE TABLE `order_status_histories` (
 -- 12. Bảng reviews: Đánh giá món ăn
 CREATE TABLE `reviews` (
   `id` INT AUTO_INCREMENT PRIMARY KEY,
-  `user_id` INT NOT NULL,
+  `order_id` INT NULL,
+  `user_id` INT NULL,
   `dish_id` INT NOT NULL,
+  `customer_name` VARCHAR(100) NULL,
   `rating` TINYINT NOT NULL,
   `comment` TEXT NULL,
+  `image_url` VARCHAR(500) NULL,
+  `store_reply` TEXT NULL,
+  `replied_at` DATETIME NULL,
   `is_visible` BOOLEAN DEFAULT TRUE,
   `created_at` DATETIME DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (`order_id`) REFERENCES `orders`(`id`) ON DELETE SET NULL,
   FOREIGN KEY (`user_id`) REFERENCES `users`(`id`) ON DELETE CASCADE,
   FOREIGN KEY (`dish_id`) REFERENCES `dishes`(`id`) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
@@ -227,10 +233,13 @@ CREATE TABLE `chat_messages` (
   `order_id` INT NULL,
   `sender_type` ENUM('customer', 'admin') NOT NULL,
   `guest_token` VARCHAR(64) NULL,
+  `customer_name` VARCHAR(100) NULL,
   `message` TEXT NOT NULL,
+  `is_read` BOOLEAN NOT NULL DEFAULT FALSE,
   `created_at` DATETIME DEFAULT CURRENT_TIMESTAMP,
   FOREIGN KEY (`user_id`) REFERENCES `users`(`id`) ON DELETE SET NULL,
-  FOREIGN KEY (`order_id`) REFERENCES `orders`(`id`) ON DELETE SET NULL
+  FOREIGN KEY (`order_id`) REFERENCES `orders`(`id`) ON DELETE SET NULL,
+  INDEX `idx_chat_guest` (`guest_token`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- Bảng items: CRUD mẫu cho bước khởi tạo base code
