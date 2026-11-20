@@ -55,15 +55,17 @@
           <table class="data-table">
             <thead>
               <tr>
+                <th>Thứ tự</th>
                 <th>ID</th>
                 <th>Tên danh mục</th>
+                <th>Số lượng món</th>
                 <th>Trạng thái hoạt động</th>
-                <th>Thao tác</th>
+                <th>Sắp xếp & Thao tác</th>
               </tr>
             </thead>
             <tbody id="admin-cat-tbody">
               <tr>
-                <td colspan="4" style="text-align:center; padding:30px; color:var(--text-dim);">Đang tải danh mục...</td>
+                <td colspan="6" style="text-align:center; padding:30px; color:var(--text-dim);">Đang tải danh mục...</td>
               </tr>
             </tbody>
           </table>
@@ -85,6 +87,11 @@
           <div class="form-group">
             <label class="form-label">Tên danh mục <span class="req">*</span></label>
             <input type="text" id="cat-form-name" class="form-control" placeholder="Ví dụ: Đồ Chiên & Ăn Vặt" maxlength="100" required>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">Thứ tự hiển thị</label>
+            <input type="number" id="cat-form-sort" class="form-control" min="0" value="0">
           </div>
 
           <label style="display:flex; align-items:center; gap:8px; cursor:pointer;">
@@ -126,17 +133,19 @@
       try {
         categoriesList = await api.get("/admin/categories");
         if (categoriesList.length === 0) {
-          tbody.innerHTML = `<tr><td colspan="4" style="text-align:center; padding:30px; color:var(--text-dim);">Chưa có danh mục nào.</td></tr>`;
+          tbody.innerHTML = `<tr><td colspan="6" style="text-align:center; padding:30px; color:var(--text-dim);">Chưa có danh mục nào.</td></tr>`;
           return;
         }
 
-        tbody.innerHTML = categoriesList.map(cat => `
-          <tr style="${!cat.is_active ? 'opacity:0.55;' : ''}">
+        tbody.innerHTML = categoriesList.map((cat, idx) => `
+          <tr draggable="true" data-id="${cat.id}" data-index="${idx}" style="${!cat.is_active ? 'opacity:0.55;' : ''} cursor:grab;">
+            <td><span class="badge-tag">#${cat.sort_order ?? (idx + 1)}</span></td>
             <td>${cat.id}</td>
             <td>
               <strong style="color:var(--text-main); font-size:1rem;">${escapeHtml(cat.name)}</strong>
               ${!cat.is_active ? '<span style="color:#ef4444; font-size:0.8rem;"> [ĐANG ẨN]</span>' : ''}
             </td>
+            <td><strong>${cat.dish_count ?? 0}</strong> món</td>
             <td>
               <button 
                 class="btn ${cat.is_active ? 'btn-secondary' : 'btn-danger'}" 
@@ -145,13 +154,20 @@
                 ${cat.is_active ? '👁️ Đang kích hoạt' : '🔒 Đang ẩn'}
               </button>
             </td>
-            <td>
+            <td style="display:flex; gap:6px; flex-wrap:wrap;">
+              <button class="btn btn-secondary" style="padding:4px 8px; font-size:0.78rem;" onclick="moveCategory(${idx}, -1)" ${idx === 0 ? 'disabled' : ''} title="Chuyển lên">⬆️ Lên</button>
+              <button class="btn btn-secondary" style="padding:4px 8px; font-size:0.78rem;" onclick="moveCategory(${idx}, 1)" ${idx === categoriesList.length - 1 ? 'disabled' : ''} title="Chuyển xuống">⬇️ Xuống</button>
               <button class="btn btn-secondary" style="padding:4px 8px; font-size:0.8rem;" onclick="openEditCatModal(${cat.id})">
-                ✏️ Sửa tên
+                ✏️ Sửa
+              </button>
+              <button class="btn btn-danger" style="padding:4px 8px; font-size:0.8rem;" onclick="deleteCategory(${cat.id})">
+                🗑️ Xoá
               </button>
             </td>
           </tr>
         `).join("");
+
+        initDragAndDropRows();
 
       } catch (err) {
         tbody.innerHTML = `<tr><td colspan="4" style="color:var(--danger); text-align:center; padding:20px;">Lỗi: ${escapeHtml(err.message)}</td></tr>`;
@@ -168,6 +184,56 @@
       }
     }
 
+    async function moveCategory(index, delta) {
+      const targetIndex = index + delta;
+      if (targetIndex < 0 || targetIndex >= categoriesList.length) return;
+      const temp = categoriesList[index];
+      categoriesList[index] = categoriesList[targetIndex];
+      categoriesList[targetIndex] = temp;
+      await persistCategoryOrder();
+    }
+
+    function initDragAndDropRows() {
+      let draggedIdx = null;
+      const rows = document.querySelectorAll("#admin-cat-tbody tr[draggable='true']");
+      rows.forEach(row => {
+        row.addEventListener("dragstart", () => {
+          draggedIdx = parseInt(row.getAttribute("data-index"));
+        });
+        row.addEventListener("dragover", (e) => e.preventDefault());
+        row.addEventListener("drop", async (e) => {
+          e.preventDefault();
+          const targetIdx = parseInt(row.getAttribute("data-index"));
+          if (draggedIdx === null || draggedIdx === targetIdx) return;
+          const [moved] = categoriesList.splice(draggedIdx, 1);
+          categoriesList.splice(targetIdx, 0, moved);
+          await persistCategoryOrder();
+        });
+      });
+    }
+
+    async function persistCategoryOrder() {
+      const payload = categoriesList.map((c, idx) => ({ id: c.id, sort_order: idx + 1 }));
+      try {
+        await api.patch("/admin/categories/reorder", payload);
+        showToast("Đã cập nhật thứ tự danh mục!", "success");
+        await loadCategories();
+      } catch (err) {
+        showToast("Lỗi sắp xếp: " + err.message, "error");
+      }
+    }
+
+    async function deleteCategory(id) {
+      if (!confirm("Bạn muốn xoá danh mục này? (Chỉ xoá được khi danh mục không còn món ăn)")) return;
+      try {
+        const res = await api.delete(`/admin/categories/${id}`);
+        showToast(res.message || "Đã xoá danh mục", "success");
+        await loadCategories();
+      } catch (err) {
+        showToast(err.message, "error");
+      }
+    }
+
     function openCatModal(cat = null) {
       const modal = document.getElementById("cat-modal");
       const title = document.getElementById("modal-cat-title");
@@ -176,11 +242,13 @@
         title.textContent = "Chỉnh Sửa Danh Mục";
         document.getElementById("cat-form-id").value = cat.id;
         document.getElementById("cat-form-name").value = cat.name;
+        document.getElementById("cat-form-sort").value = cat.sort_order ?? 1;
         document.getElementById("cat-form-active").checked = cat.is_active;
       } else {
         title.textContent = "Thêm Danh Mục Mới";
         document.getElementById("cat-form").reset();
         document.getElementById("cat-form-id").value = "";
+        document.getElementById("cat-form-sort").value = categoriesList.length + 1;
         document.getElementById("cat-form-active").checked = true;
       }
       modal.classList.add("active");
@@ -199,6 +267,7 @@
       e.preventDefault();
       const id = document.getElementById("cat-form-id").value;
       const name = document.getElementById("cat-form-name").value.trim();
+      const sort_order = parseInt(document.getElementById("cat-form-sort").value || "0");
       const is_active = document.getElementById("cat-form-active").checked;
 
       if (!name) {
@@ -208,10 +277,10 @@
 
       try {
         if (id) {
-          await api.put(`/admin/categories/${id}`, { name, is_active });
+          await api.put(`/admin/categories/${id}`, { name, sort_order, is_active });
           showToast("Cập nhật danh mục thành công!", "success");
         } else {
-          await api.post("/admin/categories", { name, is_active });
+          await api.post("/admin/categories", { name, sort_order, is_active });
           showToast("Thêm danh mục mới thành công!", "success");
         }
         closeCatModal();
