@@ -26,6 +26,7 @@ from app.db.session import get_db
 from app.models.category import Category
 from app.models.dish import Dish, DishOption
 from app.models.order import Order, OrderItem, OrderStatusHistory
+from app.models.review import Review
 from app.models.user import User
 from app.models.voucher import Voucher
 from app.routers.dishes import enrich_dishes_list
@@ -166,6 +167,96 @@ def get_dashboard_stats(
         active_dishes_count=active_dishes_count,
         active_categories_count=active_categories_count,
     )
+
+
+@router.get("/dashboard/analytics")
+def get_dashboard_analytics(
+    date_from: Optional[str] = Query(None, description="YYYY-MM-DD"),
+    date_to: Optional[str] = Query(None, description="YYYY-MM-DD"),
+    group_by: str = Query("day", pattern="^(day|month)$"),
+    db: Session = Depends(get_db),
+    current_admin: User = Depends(get_current_admin),
+):
+    """API Thống kê Dashboard Admin chi tiết theo khoảng thời gian cho Chart.js (T3D2E11):
+    - Doanh thu theo ngày / tháng.
+    - Số đơn theo từng trạng thái.
+    - Món bán chạy nhất.
+    - Điểm đánh giá trung bình toàn quán.
+    - Tổng số lượt mã giảm giá đã sử dụng.
+    """
+    order_query = db.query(Order)
+    if date_from:
+        try:
+            dt_from = datetime.strptime(date_from.strip(), "%Y-%m-%d").replace(hour=0, minute=0, second=0)
+            order_query = order_query.filter(Order.created_at >= dt_from)
+        except ValueError:
+            pass
+    if date_to:
+        try:
+            dt_to = datetime.strptime(date_to.strip(), "%Y-%m-%d").replace(hour=23, minute=59, second=59)
+            order_query = order_query.filter(Order.created_at <= dt_to)
+        except ValueError:
+            pass
+
+    orders_in_range = order_query.options(joinedload(Order.items)).order_by(Order.created_at.asc()).all()
+
+    status_counts = {
+        "pending": 0,
+        "confirmed": 0,
+        "preparing": 0,
+        "delivering": 0,
+        "completed": 0,
+        "cancelled": 0,
+    }
+    revenue_buckets: dict[str, dict] = {}
+    dish_sales: dict[int, dict] = {}
+    total_revenue = 0
+
+    for o in orders_in_range:
+        st = o.status or "pending"
+        status_counts[st] = status_counts.get(st, 0) + 1
+
+        dt = o.created_at or datetime.now()
+        period_key = dt.strftime("%Y-%m") if group_by == "month" else dt.strftime("%Y-%m-%d")
+        if period_key not in revenue_buckets:
+            revenue_buckets[period_key] = {"period": period_key, "revenue": 0, "orders_count": 0}
+        revenue_buckets[period_key]["orders_count"] += 1
+
+        if st != "cancelled":
+            rev = int(o.total_amount or 0)
+            if st == "completed":
+                total_revenue += rev
+            revenue_buckets[period_key]["revenue"] += rev
+
+            for it in (o.items or []):
+                if it.dish_id not in dish_sales:
+                    dish_sales[it.dish_id] = {
+                        "dish_id": it.dish_id,
+                        "dish_name": it.dish_name,
+                        "sold_quantity": 0,
+                        "revenue": 0,
+                    }
+                dish_sales[it.dish_id]["sold_quantity"] += int(it.quantity or 0)
+                dish_sales[it.dish_id]["revenue"] += int(it.subtotal or 0)
+
+    avg_rating_val = db.query(func.avg(Review.rating)).filter(Review.is_visible == True).scalar()
+    avg_rating = round(float(avg_rating_val or 5.0), 2)
+    total_reviews = db.query(func.count(Review.id)).filter(Review.is_visible == True).scalar() or 0
+    vouchers_used_count = db.query(func.sum(Voucher.used_count)).scalar() or 0
+
+    top_dishes = sorted(dish_sales.values(), key=lambda x: (-x["sold_quantity"], -x["revenue"]))[:6]
+    revenue_series = sorted(revenue_buckets.values(), key=lambda x: x["period"])
+
+    return {
+        "total_orders": len(orders_in_range),
+        "total_revenue": total_revenue,
+        "avg_rating": avg_rating,
+        "total_reviews": total_reviews,
+        "vouchers_used_count": int(vouchers_used_count),
+        "orders_by_status": status_counts,
+        "revenue_series": revenue_series,
+        "top_dishes": top_dishes,
+    }
 
 
 # ----------------- QUẢN LÝ MÓN ĂN & TUỲ CHỌN (FR-09, T3D1FB5) -----------------
