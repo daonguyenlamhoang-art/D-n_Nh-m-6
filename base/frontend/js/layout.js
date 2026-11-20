@@ -47,6 +47,7 @@ function renderLayout() {
           <ul class="nav-links">
             <li><a href="${root}index.html" class="${currentPath.endsWith('index.html') || currentPath === '/' ? 'active' : ''}">Trang chủ</a></li>
             <li><a href="${root}dishes.html" class="${currentPath.endsWith('dishes.html') ? 'active' : ''}">Thực đơn đêm</a></li>
+            <li><a href="${root}favorites.html" class="${currentPath.endsWith('favorites.html') ? 'active' : ''}">❤️ Yêu thích</a></li>
             <li><a href="${root}order-lookup.html" class="${currentPath.endsWith('order-lookup.html') ? 'active' : ''}">Tra cứu đơn</a></li>
             <li><a href="${root}admin/login.html" style="color:var(--text-dim); font-size:0.85rem;">🔒 Quản trị</a></li>
           </ul>

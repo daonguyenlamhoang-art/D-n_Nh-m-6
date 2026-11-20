@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Danh Sách Món Yêu Thích | NightFood (T3D2E96)</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body data-root="./">
+  <header id="app-header"></header>
+
+  <main class="container" style="padding-top: 36px; padding-bottom: 60px;">
+    <div class="section-header">
+      <div>
+        <span class="hero-tag" style="margin-bottom:8px;">MÓN NGON BẠN ĐÃ LƯU</span>
+        <h1 class="section-title">❤️ Danh Sách Món Ăn Yêu Thích</h1>
+        <p style="color:var(--text-muted); font-size:0.95rem; margin-top:4px;">
+          Các món ăn đêm bạn đã bấm thả tim để đặt nhanh bất cứ lúc nào (T3D2E96)
+        </p>
+      </div>
+      <a href="dishes.html" class="btn btn-secondary" style="font-size:0.88rem; padding:8px 16px;">
+        + Khám phá thêm món
+      </a>
+    </div>
+
+    <div id="favorites-grid" class="dish-grid-3">
+      <div style="grid-column: 1 / -1; text-align:center; padding: 50px; color:var(--text-dim);">
+        ⏳ Đang tải danh sách món yêu thích...
+      </div>
+    </div>
+  </main>
+
+  <footer id="app-footer"></footer>
+
+  <script src="https://cdn.jsdelivr.net/npm/axios@1.7.9/dist/axios.min.js"></script>
+  <script src="js/config.js"></script>
+  <script src="js/utils.js"></script>
+  <script src="js/api.js"></script>
+  <script src="js/cart-storage.js"></script>
+  <script src="js/layout.js"></script>
+  <script>
+    document.addEventListener("DOMContentLoaded", async () => {
+      await loadFavoriteDishes();
+    });
+
+    function getFavoriteIds() {
+      try {
+        const list = JSON.parse(localStorage.getItem("nightfood_favorites") || "[]");
+        return Array.isArray(list) ? list.map(Number).filter(Boolean) : [];
+      } catch (e) {
+        return [];
+      }
+    }
+
+    async function removeFavorite(dishId) {
+      let ids = getFavoriteIds().filter(id => id !== dishId);
+      localStorage.setItem("nightfood_favorites", JSON.stringify(ids));
+      showToast("Đã bỏ món khỏi danh sách yêu thích", "info");
+      await loadFavoriteDishes();
+    }
+
+    async function loadFavoriteDishes() {
+      const grid = document.getElementById("favorites-grid");
+      const ids = getFavoriteIds();
+
+      if (ids.length === 0) {
+        grid.innerHTML = `
+          <div class="card-panel" style="grid-column: 1 / -1; text-align:center; padding: 60px 20px;">
+            <div style="font-size:3.5rem; margin-bottom:12px;">🤍</div>
+            <h3 style="color:var(--text-main); margin-bottom:8px;">Bạn chưa lưu món ăn yêu thích nào</h3>
+            <p style="color:var(--text-muted); margin-bottom:20px;">Hãy bấm vào biểu tượng trái tim trên các món ăn trong thực đơn để lưu vào đây nhé!</p>
+            <a href="dishes.html" class="btn btn-primary">🍜 Xem Thực Đơn Đêm</a>
+          </div>
+        `;
+        return;
+      }
+
+      try {
+        const dishes = await api.get("/dishes", { ids: ids.join(",") });
+        if (!dishes || dishes.length === 0) {
+          grid.innerHTML = `<div style="grid-column:1/-1; text-align:center; padding:40px; color:var(--text-dim);">Không tìm thấy thông tin món yêu thích.</div>`;
+          return;
+        }
+        const defaultImg = "https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=500&auto=format&fit=crop&q=60";
+
+        grid.innerHTML = dishes.map(dish => {
+          const isAvailable = dish.is_available && dish.status !== "OUT_OF_STOCK";
+          return `
+            <div class="dish-card ${!isAvailable ? 'out-of-stock' : ''}">
+              <div class="dish-card-img-wrapper">
+                <button type="button" class="btn-fav-heart active" onclick="removeFavorite(${dish.id})" title="Bỏ yêu thích">
+                  ❤️
+                </button>
+                <img src="${escapeHtml(dish.image_url || defaultImg)}" alt="${escapeHtml(dish.name)}" class="dish-card-img" onerror="this.src='${defaultImg}'">
+                <span class="dish-card-badge">${escapeHtml(dish.category_name || 'Món yêu thích')}</span>
+              </div>
+              <div class="dish-card-body">
+                <h3 class="dish-card-title">${escapeHtml(dish.name)}</h3>
+                <p class="dish-card-desc">${escapeHtml(dish.description || '')}</p>
+                <div class="dish-card-footer">
+                  <div class="dish-price">${formatVND(dish.price)}</div>
+                  <div style="display:flex; gap:8px;">
+                    <a href="product-detail.html?id=${dish.id}" class="btn btn-secondary" style="padding:6px 12px; font-size:0.84rem;">Chi tiết</a>
+                    <button type="button" class="btn-add-cart" onclick="CartStorage.addItem(${dish.id}, 1)" ${!isAvailable ? 'disabled' : ''}>
+                      ${isAvailable ? '+ Thêm' : 'Hết món'}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          `;
+        }).join("");
+      } catch (err) {
+        grid.innerHTML = `<div style="grid-column:1/-1; text-align:center; color:var(--danger);">${escapeHtml(err.message)}</div>`;
+      }
+    }
+  </script>
+</body>
+</html>
