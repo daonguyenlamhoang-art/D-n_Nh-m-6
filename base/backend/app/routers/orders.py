@@ -11,6 +11,7 @@ from app.models.category import Category
 from app.models.dish import Dish, DishOption
 from app.models.order import Order, OrderItem, OrderStatusHistory
 from app.routers.store import check_is_store_open
+from app.routers.vouchers import evaluate_voucher
 from app.schemas.order import (
     OrderCreate,
     OrderItemOut,
@@ -153,15 +154,28 @@ def create_order(
             "quantity": item.quantity,
         })
 
-    # 4. Kiểm tra giá thay đổi lúc đặt hàng (BR-05, BR-17, TC-29)
-    if order_in.expected_total is not None and order_in.expected_total != calculated_total:
+    # 4. Kiểm tra mã giảm giá nếu có (T3D2A5B)
+    applied_voucher = None
+    discount_amount = 0
+    if order_in.voucher_code:
+        applied_voucher, discount_amount, v_msg = evaluate_voucher(db, order_in.voucher_code, calculated_total)
+        if not applied_voucher:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail={"code": "INVALID_VOUCHER", "message": v_msg, "details": {}},
+            )
+
+    final_total = max(0, calculated_total - discount_amount)
+
+    # 4b. Kiểm tra giá thay đổi lúc đặt hàng (BR-05, BR-17, TC-29)
+    if order_in.expected_total is not None and order_in.expected_total not in (calculated_total, final_total):
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail={
                 "code": "PRICE_CHANGED",
                 "message": "Giá một số món đã thay đổi, vui lòng kiểm tra lại",
                 "details": {
-                    "total_amount": calculated_total,
+                    "total_amount": final_total,
                     "items": price_check_items,
                 },
             },
@@ -174,6 +188,7 @@ def create_order(
         new_order = Order(
             order_code=order_code,
             guest_token=guest_tok,
+            voucher_id=applied_voucher.id if applied_voucher else None,
             customer_name=order_in.customer_name,
             phone=order_in.phone,
             customer_email=order_in.customer_email,
@@ -183,12 +198,14 @@ def create_order(
             desired_delivery_time=order_in.desired_delivery_time,
             subtotal=calculated_total,
             shipping_fee=0,
-            discount_amount=0,
-            total_amount=calculated_total,
+            discount_amount=discount_amount,
+            total_amount=final_total,
             payment_method=order_in.payment_method or "COD",
             status="pending",
         )
         db.add(new_order)
+        if applied_voucher:
+            applied_voucher.used_count = (applied_voucher.used_count or 0) + 1
         db.flush()  # Sinh ID đơn
 
         for it in items_to_save:
