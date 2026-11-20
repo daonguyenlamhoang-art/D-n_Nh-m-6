@@ -84,14 +84,23 @@
       </div>
     </section>
 
-    <!-- 3. Section: Món Ăn Bán Chạy Nhất (3 cột chuẩn Figma Frame 1) -->
-    <section class="container" style="margin-bottom: 40px;">
+    <!-- Thanh danh mục dính trên cùng (Sticky Category Bar - T3D24E7) -->
+    <div class="sticky-category-nav">
+      <div class="container">
+        <div id="home-category-scroll-nav" class="category-tabs" style="margin-bottom:0; padding-bottom:6px;">
+          <button class="category-tab active" data-target="featured-section">🔥 Món Nổi Bật</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 3. Section: Món Ăn Nổi Bật & Bán Chạy Nhất (3 cột chuẩn Figma Frame 1) -->
+    <section id="featured-section" class="container" style="margin-bottom: 40px; scroll-margin-top: 135px;">
       <div class="section-header">
         <h2 class="section-title">
-          <span>🔥 Món Bán Chạy Nhất Đêm Nay</span>
+          <span>🔥 Món Nổi Bật & Bán Chạy Nhất</span>
           <span class="badge-tag">Hot Nhất</span>
         </h2>
-        <a href="dishes.html" class="btn btn-secondary" style="font-size:0.88rem; padding:6px 14px;">Xem tất cả món →</a>
+        <a href="dishes.html" class="btn btn-secondary" style="font-size:0.88rem; padding:6px 14px;">Tìm kiếm & Lọc món →</a>
       </div>
 
       <!-- Danh sách món nổi bật (3 cột) -->
@@ -101,6 +110,9 @@
         </div>
       </div>
     </section>
+
+    <!-- Danh sách thực đơn theo từng danh mục (Cuộn tới danh mục khi bấm - T3D24E7) -->
+    <div id="home-categories-sections" class="container"></div>
 
     <!-- 4. Section: Promo Combo Cú Đêm (Banner rộng chuẩn Figma) -->
     <section class="container">

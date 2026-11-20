@@ -1,46 +1,78 @@
-// Logic Trang chủ NightFood theo chuẩn Figma Frame 1
+// Logic Trang chủ NightFood & Menu theo danh mục (T3D24E7, T3D2587, T3D2E96)
 
 document.addEventListener("DOMContentLoaded", async () => {
-  await loadHomeDishes();
+  await loadHomeMenu();
 });
 
-async function loadHomeDishes() {
+async function loadHomeMenu() {
   const featuredContainer = document.getElementById("featured-dishes-grid");
   const comboContainer = document.getElementById("combo-dishes-grid");
+  const navContainer = document.getElementById("home-category-scroll-nav");
+  const sectionsContainer = document.getElementById("home-categories-sections");
 
   try {
-    const dishes = await api.get("/dishes");
-    if (!dishes || dishes.length === 0) {
-      if (featuredContainer) {
-        featuredContainer.innerHTML = `
-          <div style="grid-column: 1 / -1; text-align:center; padding: 40px; color:var(--text-dim);">
-            Hiện tại chưa có món ăn nào trong thực đơn.
-          </div>
-        `;
-      }
-      return;
-    }
+    const menuData = await api.get("/dishes/menu");
+    const categories = menuData.categories || [];
+    const featured = menuData.featured_dishes || [];
+    const bestsellers = menuData.bestseller_dishes || [];
 
-    // 1. Lọc 3 món bán chạy (không phải combo) cho mục "Món Bán Chạy Nhất"
-    const hotDishes = dishes.filter(d => d.category_id !== 5).slice(0, 3);
+    // 1. Render Món nổi bật
+    const displayFeatured = featured.length > 0 ? featured.slice(0, 6) : bestsellers.slice(0, 6);
     if (featuredContainer) {
-      featuredContainer.innerHTML = hotDishes.map(d => renderFigmaDishCard(d)).join("");
+      featuredContainer.innerHTML = displayFeatured.map(d => renderFigmaDishCard(d)).join("");
     }
 
-    // 2. Lọc 3 Combo cho mục "Combo Ăn Đêm Siêu Hời"
-    const combos = dishes.filter(d => d.category_id === 5).slice(0, 3);
-    if (comboContainer) {
+    // 2. Render thanh danh mục dính trên cùng (cuộn mượt tới từng danh mục khi bấm)
+    if (navContainer && categories.length > 0) {
+      const navHtml = [
+        `<button class="category-tab active" data-target="featured-section">🔥 Món Nổi Bật</button>`,
+        ...categories.map(c => `
+          <button class="category-tab" data-target="cat-section-${c.id}">${escapeHtml(c.name)} (${c.dish_count})</button>
+        `)
+      ].join("");
+      navContainer.innerHTML = navHtml;
+
+      navContainer.querySelectorAll(".category-tab").forEach(btn => {
+        btn.addEventListener("click", () => {
+          navContainer.querySelectorAll(".category-tab").forEach(b => b.classList.remove("active"));
+          btn.classList.add("active");
+          const targetId = btn.getAttribute("data-target");
+          const targetEl = document.getElementById(targetId);
+          if (targetEl) {
+            targetEl.scrollIntoView({ behavior: "smooth", block: "start" });
+          }
+        });
+      });
+    }
+
+    // 3. Render từng khu vực danh mục trên trang chủ
+    if (sectionsContainer && categories.length > 0) {
+      sectionsContainer.innerHTML = categories.map(cat => `
+        <section id="cat-section-${cat.id}" style="margin-bottom: 44px; scroll-margin-top: 135px;">
+          <div class="section-header">
+            <h2 class="section-title">
+              <span>🍽️ ${escapeHtml(cat.name)}</span>
+              <span class="badge-tag">${cat.dish_count} món</span>
+            </h2>
+            <a href="dishes.html?category_id=${cat.id}" class="btn btn-secondary" style="font-size:0.85rem; padding:6px 14px;">
+              Xem trong bộ lọc →
+            </a>
+          </div>
+          <div class="dish-grid-3">
+            ${(cat.dishes || []).map(d => renderFigmaDishCard(d, cat.id === 5)).join("")}
+          </div>
+        </section>
+      `).join("");
+    }
+
+    // 4. Render mục Combo ăn đêm siêu hời
+    const comboCat = categories.find(c => c.id === 5);
+    const combos = comboCat ? comboCat.dishes.slice(0, 3) : [];
+    if (comboContainer && combos.length > 0) {
       comboContainer.innerHTML = combos.map(d => renderFigmaDishCard(d, true)).join("");
     }
 
-    // Gắn sự kiện Thêm vào giỏ
-    document.querySelectorAll(".btn-add-cart").forEach(btn => {
-      btn.addEventListener("click", (e) => {
-        const dishId = parseInt(e.target.getAttribute("data-id"));
-        CartStorage.addItem(dishId, 1);
-      });
-    });
-
+    bindDishCardActions();
   } catch (err) {
     if (featuredContainer) {
       featuredContainer.innerHTML = `
@@ -52,17 +84,57 @@ async function loadHomeDishes() {
   }
 }
 
+function isFavoriteDish(dishId) {
+  try {
+    const favs = JSON.parse(localStorage.getItem("nightfood_favorites") || "[]");
+    return Array.isArray(favs) && favs.includes(dishId);
+  } catch (e) {
+    return false;
+  }
+}
+
+function toggleFavoriteDish(dishId, btnEl) {
+  try {
+    let favs = JSON.parse(localStorage.getItem("nightfood_favorites") || "[]");
+    if (!Array.isArray(favs)) favs = [];
+    if (favs.includes(dishId)) {
+      favs = favs.filter(id => id !== dishId);
+      if (btnEl) {
+        btnEl.classList.remove("active");
+        btnEl.textContent = "🤍";
+      }
+      showToast("Đã bỏ khỏi danh sách món yêu thích", "info");
+    } else {
+      favs.push(dishId);
+      if (btnEl) {
+        btnEl.classList.add("active");
+        btnEl.textContent = "❤️";
+      }
+      showToast("Đã lưu vào món yêu thích ❤️", "success");
+    }
+    localStorage.setItem("nightfood_favorites", JSON.stringify(favs));
+    window.dispatchEvent(new CustomEvent("nightfood_favorites_changed"));
+  } catch (e) {
+    console.warn(e);
+  }
+}
+
 function renderFigmaDishCard(dish, isCombo = false) {
   const defaultImg = "https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=500&auto=format&fit=crop&q=60";
   const imgUrl = dish.image_url ? escapeHtml(dish.image_url) : defaultImg;
-  const isAvailable = dish.is_available;
-  const categoryBadge = isCombo ? "Combo Tiết Kiệm" : (dish.category_name || "Món Hot Đêm");
+  const isAvailable = dish.is_available && dish.status !== "OUT_OF_STOCK";
+  const categoryBadge = isCombo || dish.is_combo ? "Combo Tiết Kiệm" : (dish.category_name || "Món Hot Đêm");
+  const isFav = isFavoriteDish(dish.id);
+  const ratingText = dish.avg_rating ? `⭐ ${dish.avg_rating}` : "⭐ 5.0";
 
   return `
-    <div class="dish-card">
+    <div class="dish-card ${!isAvailable ? 'out-of-stock' : ''}" data-dish-id="${dish.id}">
       <div class="dish-card-img-wrapper">
+        <button type="button" class="btn-fav-heart ${isFav ? 'active' : ''}" data-fav-id="${dish.id}" title="Yêu thích">
+          ${isFav ? '❤️' : '🤍'}
+        </button>
         <img src="${imgUrl}" alt="${escapeHtml(dish.name)}" class="dish-card-img" loading="lazy" onerror="this.src='${defaultImg}'">
-        <span class="dish-card-badge">${escapeHtml(categoryBadge)}</span>
+        <span class="dish-card-badge">${escapeHtml(categoryBadge)} · ${ratingText}</span>
       </div>
       <div class="dish-card-body">
         <h3 class="dish-card-title">${escapeHtml(dish.name)}</h3>
@@ -72,6 +144,7 @@ function renderFigmaDishCard(dish, isCombo = false) {
           <div style="display:flex; gap:8px;">
             <a href="product-detail.html?id=${dish.id}" class="btn btn-secondary" style="padding:6px 12px; font-size:0.82rem;">Chi tiết</a>
             <button 
+              type="button"
               class="btn-add-cart" 
               data-id="${dish.id}" 
               ${!isAvailable ? 'disabled title="Món này hiện đã hết hàng"' : ''}>
@@ -82,4 +155,22 @@ function renderFigmaDishCard(dish, isCombo = false) {
       </div>
     </div>
   `;
+}
+
+function bindDishCardActions() {
+  document.querySelectorAll(".btn-add-cart").forEach(btn => {
+    btn.onclick = (e) => {
+      const dishId = parseInt(e.currentTarget.getAttribute("data-id"));
+      CartStorage.addItem(dishId, 1);
+    };
+  });
+
+  document.querySelectorAll(".btn-fav-heart").forEach(btn => {
+    btn.onclick = (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      const dishId = parseInt(e.currentTarget.getAttribute("data-fav-id"));
+      toggleFavoriteDish(dishId, e.currentTarget);
+    };
+  });
 }
