@@ -1,10 +1,12 @@
 """Router Quản trị viên (Admin) (FR-08..12, FR-15, BR-08..11, TC-14..22, TC-32, TC-34..35)."""
+import json
 import os
 import time
 import uuid
 from datetime import datetime
 from typing import Optional
 from fastapi import APIRouter, Depends, File, HTTPException, Query, Request, Response, UploadFile, status
+from pydantic import BaseModel, Field
 from sqlalchemy import func
 from sqlalchemy.orm import Session, joinedload
 
@@ -531,6 +533,73 @@ def admin_quick_toggle_featured(
     db.commit()
     db.refresh(dish)
     return enrich_dishes_list(db, [dish])[0]
+
+
+class ComboComponentItem(BaseModel):
+    dish_id: int
+    quantity: int = Field(default=1, ge=1)
+
+
+class ComboCreateRequest(BaseModel):
+    name: str = Field(..., min_length=1, max_length=150)
+    price: int = Field(..., gt=0)
+    category_id: int = 5
+    image_url: Optional[str] = None
+    description: Optional[str] = None
+    is_featured: bool = True
+    components: list[ComboComponentItem] = Field(..., min_length=2)
+
+
+@router.post("/combos", response_model=DishOut, status_code=status.HTTP_201_CREATED)
+def admin_create_combo_dish(
+    combo_in: ComboCreateRequest,
+    db: Session = Depends(get_db),
+    current_admin: User = Depends(get_current_admin),
+):
+    """Admin tạo Combo gồm nhiều món với giá ưu đãi; hiển thị và đặt như một món (T3D2E66)."""
+    comp_ids = [c.dish_id for c in combo_in.components]
+    comp_dishes = db.query(Dish).filter(Dish.id.in_(comp_ids)).all()
+    dish_map = {d.id: d for d in comp_dishes}
+
+    parts_desc = []
+    original_total = 0
+    comp_snapshots = []
+
+    for c in combo_in.components:
+        d = dish_map.get(c.dish_id)
+        if not d:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail={"code": "COMPONENT_DISH_NOT_FOUND", "message": f"Không tìm thấy món thành phần ID={c.dish_id}", "details": {}},
+            )
+        original_total += d.price * c.quantity
+        parts_desc.append(f"{c.quantity:02d} {d.name}")
+        comp_snapshots.append({"dish_id": d.id, "dish_name": d.name, "quantity": c.quantity, "unit_price": d.price})
+
+    saved_amount = max(0, original_total - combo_in.price)
+    auto_desc = f"Bao gồm: {' + '.join(parts_desc)}."
+    if saved_amount > 0:
+        auto_desc += f" Giá gốc {original_total:,}đ (Tiết kiệm {saved_amount:,}đ)."
+
+    final_desc = (combo_in.description or "").strip() or auto_desc
+
+    combo_dish = Dish(
+        category_id=combo_in.category_id,
+        name=combo_in.name.strip(),
+        description=final_desc,
+        price=combo_in.price,
+        image_url=combo_in.image_url,
+        status="AVAILABLE",
+        is_available=True,
+        is_active=True,
+        is_featured=combo_in.is_featured,
+        is_combo=True,
+        combo_items_json=json.dumps(comp_snapshots, ensure_ascii=False),
+    )
+    db.add(combo_dish)
+    db.commit()
+    db.refresh(combo_dish)
+    return enrich_dishes_list(db, [combo_dish])[0]
 
 
 @router.post("/dishes/{dish_id}/options", response_model=DishOptionOut, status_code=status.HTTP_201_CREATED)

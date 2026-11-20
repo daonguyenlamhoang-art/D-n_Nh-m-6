@@ -147,6 +147,15 @@
               <input type="checkbox" id="dish-form-featured">
               <span style="color:var(--accent-secondary); font-weight:600;">⭐ Món nổi bật</span>
             </label>
+            <label style="display:flex; align-items:center; gap:8px; cursor:pointer;">
+              <input type="checkbox" id="dish-form-combo">
+              <span style="color:var(--accent-primary); font-weight:600;">🍱 Là Combo nhiều món (T3D2E66)</span>
+            </label>
+          </div>
+
+          <div class="form-group" id="combo-items-group" style="margin-bottom:14px;">
+            <label class="form-label">🍱 Các món thành phần trong Combo (nếu là Combo ưu đãi)</label>
+            <input type="text" id="dish-form-combo-items" class="form-control" placeholder="VD: 01 Mì trộn xúc xích + 01 Khoai tây chiên + 01 Trà đào cam sả">
           </div>
 
           <!-- Cấu hình nhóm tuỳ chọn (Size / Topping) - T3D221F -->
@@ -436,6 +445,8 @@
       const is_available = document.getElementById("dish-form-available").checked;
       const is_active = document.getElementById("dish-form-active").checked;
       const is_featured = document.getElementById("dish-form-featured").checked;
+      const is_combo = document.getElementById("dish-form-combo")?.checked || (category_id === 5);
+      const combo_items_json = document.getElementById("dish-form-combo-items")?.value.trim() || null;
 
       if (!name || isNaN(price) || price <= 0 || isNaN(category_id)) {
         showToast("Vui lòng điền tên, danh mục và giá hợp lệ (> 0)", "warning");
@@ -469,6 +480,8 @@
         is_available,
         is_active,
         is_featured,
+        is_combo,
+        combo_items_json,
         options,
       };
 

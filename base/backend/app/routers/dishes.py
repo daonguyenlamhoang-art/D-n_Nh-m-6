@@ -156,6 +156,25 @@ def get_bestseller_dishes(limit: int = Query(6, ge=1, le=30), db: Session = Depe
     )[:limit]
 
 
+@router.get("/combos", response_model=list[DishOut])
+def get_combo_dishes(db: Session = Depends(get_db)):
+    """Lấy danh sách các Combo món ăn ưu đãi (T3D2E66)."""
+    dishes = (
+        db.query(Dish)
+        .join(Category, Dish.category_id == Category.id)
+        .filter(
+            Dish.is_active == True,
+            Dish.status != "HIDDEN",
+            Category.is_active == True,
+            (Dish.is_combo == True) | (Dish.category_id == 5),
+        )
+        .options(joinedload(Dish.category), joinedload(Dish.options))
+        .order_by(Dish.id.asc())
+        .all()
+    )
+    return enrich_dishes_list(db, dishes)
+
+
 def _filter_and_sort_dishes(
     db: Session,
     search: Optional[str] = None,
