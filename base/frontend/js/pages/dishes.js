@@ -186,6 +186,15 @@ async function loadDishes() {
         CartStorage.addItem(dishId, 1);
       });
     });
+
+    grid.querySelectorAll(".btn-fav-heart").forEach(btn => {
+      btn.addEventListener("click", (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        const dishId = parseInt(e.currentTarget.getAttribute("data-fav-id"));
+        toggleDishFavorite(dishId, e.currentTarget);
+      });
+    });
   } catch (err) {
     grid.innerHTML = `
       <div style="grid-column: 1 / -1; text-align:center; padding: 40px; color:var(--danger);">
@@ -220,16 +229,48 @@ function goToDishPage(p) {
   window.scrollTo({ top: 180, behavior: "smooth" });
 }
 
+function isDishFavorite(dishId) {
+  try {
+    const favs = JSON.parse(localStorage.getItem("nightfood_favorites") || "[]");
+    return Array.isArray(favs) && favs.includes(dishId);
+  } catch (e) {
+    return false;
+  }
+}
+
+function toggleDishFavorite(dishId, btnEl) {
+  try {
+    let favs = JSON.parse(localStorage.getItem("nightfood_favorites") || "[]");
+    if (!Array.isArray(favs)) favs = [];
+    if (favs.includes(dishId)) {
+      favs = favs.filter(id => id !== dishId);
+      btnEl.classList.remove("active");
+      btnEl.textContent = "🤍";
+      showToast("Đã bỏ khỏi món yêu thích", "info");
+    } else {
+      favs.push(dishId);
+      btnEl.classList.add("active");
+      btnEl.textContent = "❤️";
+      showToast("Đã lưu vào món yêu thích ❤️", "success");
+    }
+    localStorage.setItem("nightfood_favorites", JSON.stringify(favs));
+  } catch (e) {}
+}
+
 function renderDishCard(dish) {
   const defaultImg = "https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=500&auto=format&fit=crop&q=60";
   const imgUrl = dish.image_url ? escapeHtml(dish.image_url) : defaultImg;
   const isAvailable = dish.is_available && dish.status !== "OUT_OF_STOCK";
   const categoryLabel = dish.category_name ? escapeHtml(dish.category_name) : "";
   const ratingText = dish.avg_rating ? `⭐ ${dish.avg_rating}` : "⭐ 5.0";
+  const isFav = isDishFavorite(dish.id);
 
   return `
     <div class="dish-card ${!isAvailable ? 'out-of-stock' : ''}">
       <div class="dish-card-img-wrapper">
+        <button type="button" class="btn-fav-heart ${isFav ? 'active' : ''}" data-fav-id="${dish.id}" title="Lưu món yêu thích">
+          ${isFav ? '❤️' : '🤍'}
+        </button>
         <img src="${imgUrl}" alt="${escapeHtml(dish.name)}" class="dish-card-img" loading="lazy" onerror="this.src='${defaultImg}'">
         <span class="dish-card-badge" style="${!isAvailable ? 'color:#f87171; border-color:rgba(239,68,68,0.4);' : ''}">
           ${isAvailable ? `${categoryLabel || 'Còn món'} · ${ratingText}` : 'Hết hàng'}
