@@ -4,11 +4,12 @@ import random
 import re
 import time
 from typing import Optional
-from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request, status
+from fastapi import APIRouter, BackgroundTasks, Depends, Header, HTTPException, Query, Request, status
 from sqlalchemy.orm import Session, joinedload
 
 from app.core.auth import calculate_shipping_fee
 from app.core.config import settings
+from app.core.email_service import send_order_notification_email
 from app.core.rate_limit import check_order_lookup_rate_limit, record_order_lookup_failure
 from app.db.session import get_db
 from app.models.cart import Cart, CartItem
@@ -97,6 +98,7 @@ def generate_unique_order_code(db: Session) -> str:
 @router.post("", status_code=status.HTTP_201_CREATED)
 def create_order(
     order_in: OrderCreate,
+    background_tasks: BackgroundTasks,
     x_guest_token: Optional[str] = Header(None, alias="X-Guest-Token"),
     x_idempotency_key: Optional[str] = Header(None, alias="X-Idempotency-Key"),
     db: Session = Depends(get_db),
@@ -321,6 +323,17 @@ def create_order(
         db.commit()
         db.refresh(new_order)
 
+        # Gửi email xác nhận đặt món thành công chạy nền bằng FastAPI BackgroundTasks (T3D2F7B)
+        background_tasks.add_task(
+            send_order_notification_email,
+            new_order.customer_email,
+            new_order.order_code,
+            new_order.customer_name,
+            new_order.status,
+            new_order.total_amount,
+            "ORDER_CREATED",
+        )
+
         return {
             "id": new_order.id,
             "order_code": new_order.order_code,
@@ -445,6 +458,7 @@ def track_my_order(
 def customer_cancel_order(
     order_code: str,
     cancel_in: OrderCancelRequest,
+    background_tasks: BackgroundTasks,
     x_guest_token: Optional[str] = Header(None, alias="X-Guest-Token"),
     db: Session = Depends(get_db),
 ):
@@ -506,6 +520,15 @@ def customer_cancel_order(
     db.add(history)
     db.commit()
     db.refresh(order)
+    background_tasks.add_task(
+        send_order_notification_email,
+        order.customer_email,
+        order.order_code,
+        order.customer_name,
+        order.status,
+        order.total_amount,
+        "STATUS_CHANGED",
+    )
     return _build_order_lookup_out(order)
 
 
