@@ -23,6 +23,7 @@ async function loadDishDetail(id) {
   try {
     currentDish = await api.get(`/dishes/${id}`);
     renderDetail(currentDish);
+    await loadDishReviewsSection(id);
   } catch (err) {
     showError(err.message || "Không thể tải thông tin món ăn");
   }
@@ -120,6 +121,12 @@ function renderDetail(dish) {
         </div>
       </div>
     </div>
+
+    <!-- Khu vực Đánh giá món ăn (T3D2D99) -->
+    <div id="dish-reviews-section" style="margin-top:36px; padding-top:24px; border-top:1px solid var(--border-color);">
+      <h3 style="font-size:1.25rem; font-weight:700; margin-bottom:14px;">⭐ Đánh Giá Từ Khách Hàng</h3>
+      <div id="dish-reviews-list" style="color:var(--text-dim);">Đang tải đánh giá...</div>
+    </div>
   `;
 
   // Gắn sự kiện tăng/giảm số lượng
@@ -159,5 +166,45 @@ function renderDetail(dish) {
     addBtn.addEventListener("click", () => {
       CartStorage.addItem(dish.id, currentQuantity, selectedOptionId);
     });
+  }
+}
+
+async function loadDishReviewsSection(dishId) {
+  const listEl = document.getElementById("dish-reviews-list");
+  if (!listEl) return;
+  try {
+    const res = await api.get(`/dishes/${dishId}/reviews`);
+    const items = res.items || [];
+    if (items.length === 0) {
+      listEl.innerHTML = `<div style="padding:16px; background:var(--bg-main); border-radius:var(--radius-sm); color:var(--text-dim);">Chưa có đánh giá nào cho món này. Hãy đặt món và là người đầu tiên đánh giá nhé!</div>`;
+      return;
+    }
+    listEl.innerHTML = `
+      <div style="margin-bottom:16px; display:flex; align-items:center; gap:12px;">
+        <span style="font-size:1.6rem; font-weight:800; color:var(--accent-secondary);">⭐ ${res.avg_rating}/5.0</span>
+        <span style="color:var(--text-muted); font-size:0.9rem;">(${res.total_reviews} đánh giá từ khách đã mua)</span>
+      </div>
+      <div style="display:flex; flex-direction:column; gap:14px;">
+        ${items.map(r => `
+          <div style="padding:16px; background:var(--bg-main); border:1px solid var(--border-subtle); border-radius:var(--radius-md);">
+            <div style="display:flex; justify-content:space-between; margin-bottom:6px;">
+              <strong style="color:var(--text-main);">${escapeHtml(r.customer_name || 'Khách hàng')}</strong>
+              <span style="color:var(--accent-secondary);">${"⭐".repeat(r.rating)}</span>
+            </div>
+            <p style="color:var(--text-muted); font-size:0.92rem; margin-bottom:8px;">${escapeHtml(r.comment || '')}</p>
+            ${r.image_url ? `<img src="${escapeHtml(r.image_url)}" alt="Ảnh đánh giá" style="max-width:140px; border-radius:8px; margin-bottom:8px; display:block;">` : ''}
+            <div style="font-size:0.78rem; color:var(--text-dim);">${formatDateTime(r.created_at)}</div>
+            ${r.store_reply ? `
+              <div style="margin-top:10px; padding:10px 14px; background:rgba(249,115,22,0.1); border-left:3px solid var(--accent-primary); border-radius:6px; font-size:0.88rem;">
+                <strong style="color:var(--accent-primary);">🌙 Phản hồi từ NightFood:</strong>
+                <div style="color:var(--text-main); margin-top:4px;">${escapeHtml(r.store_reply)}</div>
+              </div>
+            ` : ''}
+          </div>
+        `).join("")}
+      </div>
+    `;
+  } catch (err) {
+    listEl.innerHTML = `<div style="color:var(--text-dim);">Không thể tải đánh giá.</div>`;
   }
 }

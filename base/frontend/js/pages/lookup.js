@@ -159,6 +159,51 @@ function renderLookupResult(data) {
         <span>Tổng thanh toán:</span>
         <span>${formatVND(data.total_amount)}</span>
       </div>
+
+      ${data.status === "completed" ? `
+        <div style="margin-top:24px; padding-top:18px; border-top:1px solid var(--border-color);">
+          <h4 style="font-size:1.05rem; font-weight:700; margin-bottom:12px; color:var(--accent-secondary);">⭐ Đánh Giá Món Ăn Trong Đơn Đã Hoàn Thành (T3D2D99)</h4>
+          ${data.items.map(it => `
+            <div style="background:var(--bg-main); padding:14px; border-radius:var(--radius-sm); margin-bottom:12px; border:1px solid var(--border-subtle);">
+              <div style="font-weight:700; margin-bottom:8px;">🍜 ${escapeHtml(it.dish_name)}</div>
+              <div style="display:grid; grid-template-columns: 120px 1fr auto; gap:10px; align-items:center; flex-wrap:wrap;">
+                <select id="rev-star-${it.dish_id}" class="form-control" style="padding:6px 10px; font-size:0.85rem;">
+                  <option value="5">⭐⭐⭐⭐⭐ (5)</option>
+                  <option value="4">⭐⭐⭐⭐ (4)</option>
+                  <option value="3">⭐⭐⭐ (3)</option>
+                  <option value="2">⭐⭐ (2)</option>
+                  <option value="1">⭐ (1)</option>
+                </select>
+                <input type="text" id="rev-comment-${it.dish_id}" class="form-control" placeholder="Nhận xét hương vị món ăn..." style="padding:6px 10px; font-size:0.85rem;">
+                <button type="button" class="btn btn-primary" style="padding:6px 14px; font-size:0.85rem;" onclick="submitOrderDishReview('${escapeHtml(data.order_code)}', ${it.dish_id})">
+                  Gửi Đánh Giá
+                </button>
+              </div>
+            </div>
+          `).join("")}
+        </div>
+      ` : ''}
     </div>
   `;
+}
+
+async function submitOrderDishReview(orderCode, dishId) {
+  const ratingEl = document.getElementById(`rev-star-${dishId}`);
+  const commentEl = document.getElementById(`rev-comment-${dishId}`);
+  const phoneEl = document.getElementById("lookup-phone");
+  const rating = ratingEl ? parseInt(ratingEl.value) : 5;
+  const comment = commentEl ? commentEl.value.trim() : "";
+  const phone = phoneEl ? phoneEl.value.trim() : "";
+  try {
+    await api.post("/reviews", {
+      order_code: orderCode,
+      phone: phone || null,
+      dish_id: dishId,
+      rating,
+      comment: comment || "Món ăn rất ngon, giao nhanh!",
+    });
+    showToast("Cảm ơn bạn đã gửi đánh giá món ăn! ⭐", "success");
+  } catch (err) {
+    showToast(err.message, "error");
+  }
 }
