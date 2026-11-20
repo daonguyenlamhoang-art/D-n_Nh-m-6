@@ -1,7 +1,8 @@
 """Router Đơn hàng & Tra cứu đơn cho khách hàng (FR-06, FR-07, BR-01..18, TC-09..13, TC-23..24, TC-27..31, TC-33, TC-39)."""
 import random
 import time
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from typing import Optional
+from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request, status
 from sqlalchemy.orm import Session, joinedload
 
 from app.core.rate_limit import check_order_lookup_rate_limit, record_order_lookup_failure
@@ -15,6 +16,7 @@ from app.schemas.order import (
     OrderItemOut,
     OrderLookupOut,
     OrderLookupRequest,
+    OrderStatusHistoryOut,
 )
 
 router = APIRouter(prefix="/orders", tags=["Orders"])
@@ -49,7 +51,11 @@ def generate_unique_order_code(db: Session) -> str:
 
 
 @router.post("", status_code=status.HTTP_201_CREATED)
-def create_order(order_in: OrderCreate, db: Session = Depends(get_db)):
+def create_order(
+    order_in: OrderCreate,
+    x_guest_token: Optional[str] = Header(None, alias="X-Guest-Token"),
+    db: Session = Depends(get_db),
+):
     """Đặt hàng trực tuyến (FR-06, BR-01..07, BR-14, BR-17)."""
     # 1. Kiểm tra giờ mở cửa (FR-14, TC-39)
     is_open, status_text, _ = check_is_store_open()
@@ -164,16 +170,22 @@ def create_order(order_in: OrderCreate, db: Session = Depends(get_db)):
     # 5. Lưu đơn trong transaction cơ sở dữ liệu (BR-14, TC-09, TC-26)
     try:
         order_code = generate_unique_order_code(db)
+        guest_tok = order_in.guest_token or x_guest_token
         new_order = Order(
             order_code=order_code,
+            guest_token=guest_tok,
             customer_name=order_in.customer_name,
             phone=order_in.phone,
+            customer_email=order_in.customer_email,
             address=order_in.address,
+            area=order_in.area or "Nội thành",
             note=order_in.note,
+            desired_delivery_time=order_in.desired_delivery_time,
             subtotal=calculated_total,
+            shipping_fee=0,
             discount_amount=0,
             total_amount=calculated_total,
-            payment_method="COD",
+            payment_method=order_in.payment_method or "COD",
             status="pending",
         )
         db.add(new_order)
@@ -219,13 +231,113 @@ def create_order(order_in: OrderCreate, db: Session = Depends(get_db)):
         )
 
 
+def _build_order_lookup_out(order: Order) -> OrderLookupOut:
+    histories = sorted(order.status_histories or [], key=lambda h: h.changed_at or order.created_at)
+    return OrderLookupOut(
+        id=order.id,
+        order_code=order.order_code,
+        status=order.status,
+        status_display=STATUS_MAP.get(order.status, order.status),
+        created_at=order.created_at,
+        subtotal=order.subtotal,
+        shipping_fee=order.shipping_fee or 0,
+        discount_amount=order.discount_amount or 0,
+        total_amount=order.total_amount,
+        payment_method=order.payment_method,
+        payment_confirmed=bool(order.payment_confirmed),
+        desired_delivery_time=order.desired_delivery_time,
+        area=order.area,
+        customer_name=order.customer_name,
+        masked_address=mask_address(order.address),
+        items=[OrderItemOut.model_validate(it) for it in order.items],
+        status_histories=[OrderStatusHistoryOut.model_validate(h) for h in histories],
+    )
+
+
+@router.get("/my", response_model=list[OrderLookupOut])
+def get_my_orders(
+    status_filter: Optional[str] = Query(None, alias="status"),
+    phone: Optional[str] = Query(None, description="Số điện thoại của khách"),
+    guest_token: Optional[str] = Query(None, description="Guest token định danh khách"),
+    x_guest_token: Optional[str] = Header(None, alias="X-Guest-Token"),
+    db: Session = Depends(get_db),
+):
+    """Khách xem danh sách đơn của mình theo trạng thái kèm món, tuỳ chọn và lịch sử trạng thái (T3D28EF)."""
+    eff_token = (guest_token or x_guest_token or "").strip()
+    eff_phone = (phone or "").strip()
+
+    if not eff_token and not eff_phone:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail={
+                "code": "OWNER_REQUIRED",
+                "message": "Vui lòng cung cấp số điện thoại hoặc phiên khách hàng để xem đơn của bạn",
+                "details": {},
+            },
+        )
+
+    query = db.query(Order).options(joinedload(Order.items), joinedload(Order.status_histories))
+    if eff_token and eff_phone:
+        query = query.filter((Order.guest_token == eff_token) | (Order.phone == eff_phone))
+    elif eff_token:
+        query = query.filter(Order.guest_token == eff_token)
+    else:
+        query = query.filter(Order.phone == eff_phone)
+
+    if status_filter:
+        query = query.filter(Order.status == status_filter.strip())
+
+    orders = query.order_by(Order.created_at.desc()).limit(50).all()
+    return [_build_order_lookup_out(o) for o in orders]
+
+
+@router.get("/{order_code}/track", response_model=OrderLookupOut)
+def track_my_order(
+    order_code: str,
+    phone: Optional[str] = Query(None),
+    guest_token: Optional[str] = Query(None),
+    x_guest_token: Optional[str] = Header(None, alias="X-Guest-Token"),
+    db: Session = Depends(get_db),
+):
+    """Theo dõi chi tiết 1 đơn hàng của khách kèm dòng thời gian trạng thái; chỉ xem đơn của mình (T3D28EF)."""
+    eff_token = (guest_token or x_guest_token or "").strip()
+    eff_phone = (phone or "").strip()
+    code_clean = order_code.strip().upper()
+
+    order = (
+        db.query(Order)
+        .filter(Order.order_code == code_clean)
+        .options(joinedload(Order.items), joinedload(Order.status_histories))
+        .first()
+    )
+    if not order:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail={"code": "ORDER_NOT_FOUND", "message": "Không tìm thấy đơn hàng", "details": {}},
+        )
+
+    is_owner = False
+    if eff_phone and order.phone == eff_phone:
+        is_owner = True
+    if eff_token and order.guest_token and order.guest_token == eff_token:
+        is_owner = True
+
+    if not is_owner:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail={"code": "FORBIDDEN_ORDER", "message": "Bạn chỉ có quyền xem đơn hàng của chính mình", "details": {}},
+        )
+
+    return _build_order_lookup_out(order)
+
+
 @router.post("/lookup", response_model=OrderLookupOut)
 def lookup_order(
     lookup_in: OrderLookupRequest,
     request: Request,
     db: Session = Depends(get_db),
 ):
-    """Tra cứu đơn hàng bằng Mã đơn + Số điện thoại (FR-07, BR-12, TC-23, TC-24, TC-33)."""
+    """Tra cứu đơn hàng bằng Mã đơn + Số điện thoại (FR-07, BR-12, TC-23, TC-24, TC-33, T3D28EF)."""
     client_ip = request.client.host if request.client else "unknown"
 
     # Kiểm tra giới hạn số lần thử tra cứu (TC-33)
@@ -244,7 +356,7 @@ def lookup_order(
     order = (
         db.query(Order)
         .filter(Order.order_code == lookup_in.order_code, Order.phone == lookup_in.phone)
-        .options(joinedload(Order.items))
+        .options(joinedload(Order.items), joinedload(Order.status_histories))
         .first()
     )
 
@@ -259,15 +371,4 @@ def lookup_order(
             },
         )
 
-    # Ẩn địa chỉ để bảo vệ riêng tư
-    return OrderLookupOut(
-        order_code=order.order_code,
-        status=order.status,
-        status_display=STATUS_MAP.get(order.status, order.status),
-        created_at=order.created_at,
-        total_amount=order.total_amount,
-        payment_method=order.payment_method,
-        customer_name=order.customer_name,
-        masked_address=mask_address(order.address),
-        items=[OrderItemOut.model_validate(it) for it in order.items],
-    )
+    return _build_order_lookup_out(order)
