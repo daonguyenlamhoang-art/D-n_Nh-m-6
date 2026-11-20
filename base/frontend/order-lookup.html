@@ -39,8 +39,32 @@
         </form>
       </div>
 
-      <!-- Khu vực hiển thị kết quả -->
-      <div id="lookup-result-container"></div>
+      <!-- Khu vực hiển thị kết quả theo dõi 1 đơn (Tự cập nhật mỗi 15 giây - T3D29F3) -->
+      <div id="lookup-result-container" style="margin-bottom: 36px;"></div>
+
+      <!-- Khu vực: Đơn Hàng Của Tôi theo tab trạng thái (T3D29F3) -->
+      <div class="card-panel">
+        <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px; margin-bottom:14px;">
+          <h3 style="font-size:1.2rem; font-weight:800;">📋 Đơn Hàng Của Tôi</h3>
+          <button type="button" id="btn-refresh-my-orders" class="btn btn-secondary" style="padding:5px 12px; font-size:0.82rem;">
+            🔄 Tải lại danh sách
+          </button>
+        </div>
+
+        <div id="my-orders-status-tabs" class="category-tabs" style="margin-bottom:16px; padding-bottom:10px;">
+          <button class="category-tab active" data-status="">Tất cả</button>
+          <button class="category-tab" data-status="pending">Chờ xác nhận</button>
+          <button class="category-tab" data-status="confirmed">Đã xác nhận</button>
+          <button class="category-tab" data-status="preparing">Đang chuẩn bị</button>
+          <button class="category-tab" data-status="delivering">Đang giao</button>
+          <button class="category-tab" data-status="completed">Hoàn thành</button>
+          <button class="category-tab" data-status="cancelled">Đã huỷ</button>
+        </div>
+
+        <div id="my-orders-list-container">
+          <div style="text-align:center; padding:24px; color:var(--text-dim);">Đang tải đơn hàng của bạn...</div>
+        </div>
+      </div>
     </div>
   </main>
 
