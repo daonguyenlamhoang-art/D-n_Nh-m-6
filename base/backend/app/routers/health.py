@@ -4,6 +4,7 @@ from fastapi.responses import JSONResponse
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
+from app.core.config import settings
 from app.db.session import get_db
 
 router = APIRouter(tags=["Health"])
@@ -13,9 +14,19 @@ router = APIRouter(tags=["Health"])
 def health_check(db: Session = Depends(get_db)):
     try:
         db.execute(text("SELECT 1"))
-        return {"status": "ok", "database": "connected"}
+        return {
+            "status": "ok",
+            "database": "connected",
+            "mysql_display": "MySQL: connected",
+            "db_name": settings.DB_NAME,
+        }
     except Exception as error:  # noqa: BLE001 - muốn bắt mọi lỗi kết nối để báo ra
         return JSONResponse(
             status_code=503,
-            content={"status": "error", "database": "disconnected", "detail": str(error)},
+            content={
+                "status": "error",
+                "database": "disconnected",
+                "mysql_display": "MySQL: disconnected",
+                "detail": str(error),
+            },
         )
