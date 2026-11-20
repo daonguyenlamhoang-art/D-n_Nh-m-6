@@ -63,3 +63,8 @@ INSERT INTO `reviews` (`user_id`, `dish_id`, `rating`, `comment`, `is_visible`) 
 (1, 1, 5, 'Mì trộn rất vừa vị, sốt béo ngậy, giao hàng lúc 1h sáng mà vẫn nóng hổi!', 1),
 (1, 14, 5, 'Combo Cú Đêm quá hợp lý cho dân coder trực đêm, gà chiên ráo dầu.', 1),
 (1, 2, 5, 'Cơm gà sốt cay thơm ngon, đùi gà to đùng ăn no căng bụng.', 1);
+
+-- 6. Dữ liệu mẫu cho bảng items (CRUD mẫu khởi tạo)
+INSERT INTO `items` (`name`, `description`, `price`) VALUES
+('Mì trộn xúc xích mẫu', 'Item mẫu kiểm tra kết nối FastAPI + MySQL', 35000),
+('Trà đào cam sả mẫu', 'Đồ uống mẫu kiểm tra CRUD base code', 20000);
