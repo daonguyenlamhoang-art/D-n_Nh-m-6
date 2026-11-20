@@ -2,6 +2,7 @@
 import os
 import time
 import uuid
+from datetime import datetime
 from typing import Optional
 from fastapi import APIRouter, Depends, File, HTTPException, Query, Request, Response, UploadFile, status
 from sqlalchemy import func
@@ -606,17 +607,65 @@ def admin_delete_category(
     return {"message": f"Đã xoá danh mục '{cat.name}' thành công"}
 
 
-# ----------------- QUẢN LÝ ĐƠN HÀNG (FR-11, FR-12) -----------------
+# ----------------- QUẢN LÝ ĐƠN HÀNG & XỬ LÝ ĐƠN CHO NHÂN VIÊN (FR-11, FR-12, T3D29D9) -----------------
+@router.get("/orders/board")
+def admin_get_orders_board(
+    search: Optional[str] = Query(None, description="Tìm theo mã đơn hoặc SĐT"),
+    date_filter: Optional[str] = Query(None, alias="date", description="YYYY-MM-DD"),
+    db: Session = Depends(get_db),
+    current_admin: User = Depends(get_current_admin),
+):
+    """Bảng đơn hàng theo cột trạng thái (Mới, Đang chuẩn bị, Đang giao) theo thời gian cho nhân viên xử lý (T3D29D9, T3D2A0D)."""
+    query = db.query(Order).options(joinedload(Order.items), joinedload(Order.status_histories))
+    if search:
+        s = f"%{search.strip()}%"
+        query = query.filter((Order.order_code.ilike(s)) | (Order.phone.ilike(s)) | (Order.customer_name.ilike(s)))
+    if date_filter:
+        try:
+            dt = datetime.strptime(date_filter.strip(), "%Y-%m-%d")
+            start_dt = dt.replace(hour=0, minute=0, second=0)
+            end_dt = dt.replace(hour=23, minute=59, second=59)
+            query = query.filter(Order.created_at >= start_dt, Order.created_at <= end_dt)
+        except ValueError:
+            pass
+
+    active_orders = (
+        query.filter(Order.status.in_(["pending", "confirmed", "preparing", "delivering"]))
+        .order_by(Order.created_at.asc())
+        .all()
+    )
+
+    new_orders = [OrderOut.model_validate(o) for o in active_orders if o.status == "pending"]
+    preparing_orders = [OrderOut.model_validate(o) for o in active_orders if o.status in ("confirmed", "preparing")]
+    delivering_orders = [OrderOut.model_validate(o) for o in active_orders if o.status == "delivering"]
+    latest_pending_id = max((o.id for o in new_orders), default=0)
+
+    return {
+        "new_orders": new_orders,
+        "preparing_orders": preparing_orders,
+        "delivering_orders": delivering_orders,
+        "latest_pending_id": latest_pending_id,
+        "counts": {
+            "new": len(new_orders),
+            "preparing": len(preparing_orders),
+            "delivering": len(delivering_orders),
+        },
+    }
+
+
 @router.get("/orders")
 def admin_get_orders(
     status_filter: Optional[str] = Query(None, alias="status"),
     search: Optional[str] = Query(None, description="Tìm theo mã đơn, SĐT hoặc tên"),
+    date_filter: Optional[str] = Query(None, alias="date", description="Lọc theo ngày YYYY-MM-DD"),
+    date_from: Optional[str] = Query(None, description="Từ ngày YYYY-MM-DD"),
+    date_to: Optional[str] = Query(None, description="Đến ngày YYYY-MM-DD"),
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
     db: Session = Depends(get_db),
     current_admin: User = Depends(get_current_admin),
 ):
-    """Xem danh sách đơn hàng có lọc trạng thái và phân trang (FR-11, TC-20)."""
+    """Xem danh sách đơn hàng có lọc theo ngày/trạng thái, tìm theo mã/SĐT và phân trang (FR-11, T3D29D9)."""
     query = db.query(Order).options(joinedload(Order.items), joinedload(Order.status_histories))
 
     if status_filter:
@@ -625,6 +674,30 @@ def admin_get_orders(
     if search:
         s = f"%{search.strip()}%"
         query = query.filter((Order.order_code.ilike(s)) | (Order.phone.ilike(s)) | (Order.customer_name.ilike(s)))
+
+    if date_filter:
+        try:
+            dt = datetime.strptime(date_filter.strip(), "%Y-%m-%d")
+            query = query.filter(
+                Order.created_at >= dt.replace(hour=0, minute=0, second=0),
+                Order.created_at <= dt.replace(hour=23, minute=59, second=59),
+            )
+        except ValueError:
+            pass
+
+    if date_from:
+        try:
+            dt_from = datetime.strptime(date_from.strip(), "%Y-%m-%d").replace(hour=0, minute=0, second=0)
+            query = query.filter(Order.created_at >= dt_from)
+        except ValueError:
+            pass
+
+    if date_to:
+        try:
+            dt_to = datetime.strptime(date_to.strip(), "%Y-%m-%d").replace(hour=23, minute=59, second=59)
+            query = query.filter(Order.created_at <= dt_to)
+        except ValueError:
+            pass
 
     total = query.count()
     orders = query.order_by(Order.created_at.desc()).offset((page - 1) * page_size).limit(page_size).all()
