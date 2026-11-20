@@ -2,7 +2,39 @@
 
 document.addEventListener("DOMContentLoaded", async () => {
   await loadHomeMenu();
+  renderRecentlyViewedSection();
+
+  const clearBtn = document.getElementById("btn-clear-recent");
+  if (clearBtn) {
+    clearBtn.addEventListener("click", () => {
+      localStorage.removeItem("nightfood_recently_viewed");
+      renderRecentlyViewedSection();
+    });
+  }
 });
+
+function renderRecentlyViewedSection() {
+  const section = document.getElementById("recently-viewed-section");
+  const grid = document.getElementById("recently-viewed-grid");
+  if (!section || !grid) return;
+
+  try {
+    const list = JSON.parse(localStorage.getItem("nightfood_recently_viewed") || "[]");
+    if (!Array.isArray(list) || list.length === 0) {
+      section.style.display = "none";
+      return;
+    }
+    section.style.display = "block";
+    grid.innerHTML = list.slice(0, 3).map(d => renderFigmaDishCard({
+      ...d,
+      is_available: true,
+      status: "AVAILABLE",
+    })).join("");
+    bindDishCardActions();
+  } catch (e) {
+    section.style.display = "none";
+  }
+}
 
 async function loadHomeMenu() {
   const featuredContainer = document.getElementById("featured-dishes-grid");

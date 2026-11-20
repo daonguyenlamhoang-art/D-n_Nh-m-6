@@ -114,6 +114,19 @@
     <!-- Danh sách thực đơn theo từng danh mục (Cuộn tới danh mục khi bấm - T3D24E7) -->
     <div id="home-categories-sections" class="container"></div>
 
+    <!-- Khu vực Món đã xem gần đây từ localStorage (T3D2587) -->
+    <section id="recently-viewed-section" class="container" style="display:none; margin-bottom:44px;">
+      <div class="section-header">
+        <h2 class="section-title">
+          <span>🕒 Món Bạn Đã Xem Gần Đây</span>
+        </h2>
+        <button type="button" id="btn-clear-recent" class="btn btn-secondary" style="font-size:0.8rem; padding:4px 12px;">
+          Xoá lịch sử xem
+        </button>
+      </div>
+      <div id="recently-viewed-grid" class="dish-grid-3"></div>
+    </section>
+
     <!-- 4. Section: Promo Combo Cú Đêm (Banner rộng chuẩn Figma) -->
     <section class="container">
       <div class="promo-combo-banner">

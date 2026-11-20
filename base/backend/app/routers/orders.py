@@ -550,3 +550,49 @@ def lookup_order(
         )
 
     return _build_order_lookup_out(order)
+
+
+@router.post("/{order_code}/reorder")
+def reorder_from_past_order(
+    order_code: str,
+    db: Session = Depends(get_db),
+):
+    """Lấy danh sách món còn bán từ đơn cũ để khách bấm 'Đặt lại' thêm nhanh vào giỏ (T3D2587)."""
+    code_clean = order_code.strip().upper()
+    order = (
+        db.query(Order)
+        .filter(Order.order_code == code_clean)
+        .options(joinedload(Order.items))
+        .first()
+    )
+    if not order:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail={"code": "ORDER_NOT_FOUND", "message": "Không tìm thấy đơn hàng cũ", "details": {}},
+        )
+
+    dish_ids = [it.dish_id for it in order.items]
+    dishes = db.query(Dish).filter(Dish.id.in_(dish_ids), Dish.is_active == True, Dish.is_available == True).all()
+    avail_ids = {d.id for d in dishes}
+
+    reorder_items = []
+    skipped_items = []
+    for it in order.items:
+        if it.dish_id in avail_ids:
+            reorder_items.append({
+                "dish_id": it.dish_id,
+                "dish_name": it.dish_name,
+                "quantity": it.quantity,
+                "dish_option_id": it.dish_option_id,
+                "option_name": it.option_name,
+                "note": it.note,
+            })
+        else:
+            skipped_items.append(it.dish_name)
+
+    return {
+        "order_code": order.order_code,
+        "items": reorder_items,
+        "skipped_items": skipped_items,
+        "message": "Đã chuẩn bị danh sách món để đặt lại",
+    }
