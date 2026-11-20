@@ -266,6 +266,7 @@
 
     async function loadDishes() {
       const tbody = document.getElementById("admin-dishes-tbody");
+      tbody.innerHTML = `<tr><td colspan="7" class="admin-state-box">⏳ Đang tải danh sách thực đơn...</td></tr>`;
       const search = document.getElementById("admin-dish-search").value.trim();
       const catId = document.getElementById("admin-dish-cat-filter").value;
       const statusFilter = document.getElementById("admin-dish-status-filter").value;
@@ -334,7 +335,14 @@
         `).join("");
 
       } catch (err) {
-        tbody.innerHTML = `<tr><td colspan="7" style="color:var(--danger); text-align:center; padding:20px;">Lỗi: ${escapeHtml(err.message)}</td></tr>`;
+        tbody.innerHTML = `
+          <tr>
+            <td colspan="7" class="admin-state-box error">
+              <div>⚠️ Lỗi tải dữ liệu: ${escapeHtml(err.message)}</div>
+              <button type="button" class="btn btn-secondary" style="margin-top:10px; padding:5px 12px; font-size:0.8rem;" onclick="loadDishes()">🔄 Thử lại</button>
+            </td>
+          </tr>
+        `;
       }
     }
 
