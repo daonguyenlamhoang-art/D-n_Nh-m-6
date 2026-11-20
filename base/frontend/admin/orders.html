@@ -461,6 +461,7 @@
       if (st === "pending") {
         actionsEl.innerHTML = `
           <button class="btn btn-secondary" onclick="printOrderReceipt()">🖨️ In Phiếu Đơn</button>
+          ${order.payment_method === 'CHUYEN_KHOAN' ? `<button class="btn btn-primary" style="background:var(--info);" onclick="confirmQrPayment(${order.id})">🏦 Đã Nhận Tiền QR (→ Xác nhận)</button>` : ''}
           <button class="btn btn-danger" onclick="promptCancelOrder(${order.id})">❌ Hủy Đơn</button>
           <button class="btn btn-primary" onclick="updateOrderStatus(${order.id}, 'confirmed', '${st}')">✅ Xác Nhận Đơn</button>
         `;
@@ -489,6 +490,18 @@
           <button class="btn btn-secondary" onclick="printOrderReceipt()">🖨️ In Phiếu Đơn</button>
           <button class="btn btn-secondary" onclick="closeOrderModal()">Đóng</button>
         `;
+      }
+    }
+
+    async function confirmQrPayment(orderId) {
+      try {
+        await api.post(`/admin/orders/${orderId}/confirm-payment`);
+        showToast("Đã xác nhận nhận tiền VietQR! Đơn đã chuyển sang Đã xác nhận.", "success");
+        await openOrderDetail(orderId);
+        await loadOrdersBoard();
+        await loadOrders();
+      } catch (err) {
+        showToast(err.message, "error");
       }
     }
 

@@ -596,3 +596,31 @@ def reorder_from_past_order(
         "skipped_items": skipped_items,
         "message": "Đã chuẩn bị danh sách món để đặt lại",
     }
+
+
+@router.get("/{order_code}/vietqr")
+def get_order_vietqr_info(order_code: str, db: Session = Depends(get_db)):
+    """Thông tin mã QR VietQR theo tổng tiền và nội dung = mã đơn (T3D2F61)."""
+    code_clean = order_code.strip().upper()
+    order = db.query(Order).filter(Order.order_code == code_clean).first()
+    if not order:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail={"code": "ORDER_NOT_FOUND", "message": "Không tìm thấy đơn hàng", "details": {}},
+        )
+    qr_url = (
+        f"https://img.vietqr.io/image/MB-0988888999-compact2.png"
+        f"?amount={order.total_amount}&addInfo={order.order_code}&accountName=NIGHTFOOD%20HA%20NOI"
+    )
+    return {
+        "order_code": order.order_code,
+        "total_amount": order.total_amount,
+        "payment_method": order.payment_method,
+        "payment_confirmed": bool(order.payment_confirmed),
+        "status": order.status,
+        "bank_id": "MB",
+        "account_no": "0988888999",
+        "account_name": "NIGHTFOOD HA NOI",
+        "transfer_memo": order.order_code,
+        "qr_image_url": qr_url,
+    }

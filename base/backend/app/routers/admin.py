@@ -1059,3 +1059,40 @@ def admin_cancel_order_with_reason(
     db.commit()
     db.refresh(order)
     return OrderOut.model_validate(order)
+
+
+@router.post("/orders/{order_id}/confirm-payment", response_model=OrderOut)
+def admin_confirm_qr_payment(
+    order_id: int,
+    db: Session = Depends(get_db),
+    current_admin: User = Depends(get_current_admin),
+):
+    """Nhân viên xác nhận đã nhận tiền chuyển khoản QR -> tự chuyển đơn sang 'Đã xác nhận' (confirmed) (T3D2F61)."""
+    order = (
+        db.query(Order)
+        .filter(Order.id == order_id)
+        .options(joinedload(Order.items), joinedload(Order.status_histories))
+        .first()
+    )
+    if not order:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail={"code": "ORDER_NOT_FOUND", "message": "Không tìm thấy đơn hàng", "details": {}},
+        )
+
+    order.payment_confirmed = True
+    if order.status == "pending":
+        old_st = order.status
+        order.status = "confirmed"
+        history = OrderStatusHistory(
+            order_id=order.id,
+            changed_by=current_admin.id,
+            old_status=old_st,
+            new_status="confirmed",
+            note="Nhân viên xác nhận đã nhận tiền chuyển khoản VietQR -> Đã xác nhận",
+        )
+        db.add(history)
+
+    db.commit()
+    db.refresh(order)
+    return OrderOut.model_validate(order)
