@@ -42,20 +42,50 @@
           <p style="color:var(--text-muted); font-size:0.88rem;">Tiếp nhận đơn mới, xác nhận, chuẩn bị món, giao hàng và hoàn thành theo quy trình chuẩn 4.1</p>
         </div>
 
-        <div>
+        <div style="display:flex; gap:10px; align-items:center;">
+          <button id="btn-test-sound" class="btn btn-secondary" style="font-size:0.82rem; padding:6px 12px;" onclick="playNewOrderBeep()">
+            🔔 Test Âm Báo Đơn Mới
+          </button>
           <button id="btn-refresh-orders" class="btn btn-secondary" style="font-size:0.85rem; padding:6px 14px;">
             🔄 Làm Mới Đơn
           </button>
         </div>
       </div>
 
-      <!-- Lọc và tìm kiếm đơn -->
-      <div class="card-panel" style="padding:16px; margin-bottom:20px; display:flex; gap:16px; align-items:center; flex-wrap:wrap;">
-        <div style="flex-grow:1; max-width:320px;">
+      <!-- Bảng 3 Cột Nhân Viên Xử Lý Đơn Nhanh (Mới, Đang chuẩn bị, Đang giao) - T3D2A0D -->
+      <div class="dish-grid-3" id="staff-kanban-board" style="margin-bottom:28px;">
+        <div class="card-panel" style="padding:16px; border-top:3px solid var(--warning); margin-bottom:0;">
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+            <h3 style="font-size:1rem; font-weight:800; color:var(--warning);">🆕 Đơn Mới (Chờ xác nhận)</h3>
+            <span id="col-count-new" class="badge-status badge-pending">0</span>
+          </div>
+          <div id="col-orders-new" style="display:flex; flex-direction:column; gap:10px; max-height:360px; overflow-y:auto;"></div>
+        </div>
+
+        <div class="card-panel" style="padding:16px; border-top:3px solid #a855f7; margin-bottom:0;">
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+            <h3 style="font-size:1rem; font-weight:800; color:#c084fc;">🍳 Đang Chuẩn Bị Món</h3>
+            <span id="col-count-prep" class="badge-status badge-preparing">0</span>
+          </div>
+          <div id="col-orders-prep" style="display:flex; flex-direction:column; gap:10px; max-height:360px; overflow-y:auto;"></div>
+        </div>
+
+        <div class="card-panel" style="padding:16px; border-top:3px solid var(--accent-primary); margin-bottom:0;">
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+            <h3 style="font-size:1rem; font-weight:800; color:var(--accent-primary);">🛵 Đang Giao Hàng</h3>
+            <span id="col-count-deliv" class="badge-status badge-delivering">0</span>
+          </div>
+          <div id="col-orders-deliv" style="display:flex; flex-direction:column; gap:10px; max-height:360px; overflow-y:auto;"></div>
+        </div>
+      </div>
+
+      <!-- Lọc và tìm kiếm toàn bộ lịch sử đơn (T3D29D9, T3D2A27) -->
+      <div class="card-panel" style="padding:16px; margin-bottom:20px; display:flex; gap:14px; align-items:center; flex-wrap:wrap;">
+        <div style="flex-grow:1; max-width:280px;">
           <input type="text" id="admin-order-search" class="form-control" placeholder="Tìm theo mã đơn, SĐT hoặc tên..." style="padding:8px 12px; font-size:0.9rem;">
         </div>
 
-        <div style="min-width:200px;">
+        <div style="min-width:180px;">
           <select id="admin-order-status-filter" class="form-control" style="padding:8px 12px; font-size:0.9rem;">
             <option value="">-- Tất cả trạng thái --</option>
             <option value="pending">Chờ xác nhận</option>
@@ -65,6 +95,16 @@
             <option value="completed">Hoàn thành</option>
             <option value="cancelled">Đã hủy</option>
           </select>
+        </div>
+
+        <div>
+          <input type="date" id="admin-order-date-filter" class="form-control" style="padding:7px 12px; font-size:0.88rem;" title="Lọc theo ngày đặt">
+        </div>
+
+        <div style="margin-left:auto;">
+          <button type="button" id="btn-export-orders-list" class="btn btn-secondary" style="padding:8px 14px; font-size:0.85rem;" onclick="exportFilteredOrdersCSV()">
+            📥 Xuất Danh Sách CSV
+          </button>
         </div>
       </div>
 
@@ -118,42 +158,176 @@
   <script src="../js/pages/admin.js"></script>
   <script>
     let currentViewingOrder = null;
+    let currentOrdersCache = [];
+    let lastKnownPendingId = null;
+
+    // Âm báo đơn hàng mới bằng Web Audio API (T3D2A0D)
+    function playNewOrderBeep() {
+      try {
+        const ctx = new (window.AudioContext || window.webkitAudioContext)();
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = "sine";
+        osc.frequency.setValueAtTime(880, ctx.currentTime);
+        osc.frequency.setValueAtTime(1174.66, ctx.currentTime + 0.14);
+        gain.gain.setValueAtTime(0.25, ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.45);
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.start();
+        osc.stop(ctx.currentTime + 0.45);
+      } catch (e) {
+        console.warn("AudioContext blocked:", e);
+      }
+    }
 
     document.addEventListener("DOMContentLoaded", async () => {
       const user = await checkAdminAuth();
       if (!user) return;
 
       document.getElementById("btn-admin-logout").addEventListener("click", handleAdminLogout);
-      document.getElementById("btn-refresh-orders").addEventListener("click", loadOrders);
+      document.getElementById("btn-refresh-orders").addEventListener("click", async () => {
+        await loadOrdersBoard();
+        await loadOrders();
+      });
 
-      document.getElementById("admin-order-search").addEventListener("input", () => loadOrders());
+      document.getElementById("admin-order-search").addEventListener("input", () => {
+        loadOrdersBoard();
+        loadOrders();
+      });
       document.getElementById("admin-order-status-filter").addEventListener("change", () => loadOrders());
+      document.getElementById("admin-order-date-filter").addEventListener("change", () => {
+        loadOrdersBoard();
+        loadOrders();
+      });
 
       document.getElementById("modal-order-close").addEventListener("click", closeOrderModal);
 
-      // Nếu có ?id= trên URL, tự mở modal đơn đó
       const urlParams = new URLSearchParams(window.location.search);
       const orderIdParam = urlParams.get("id");
 
+      await loadOrdersBoard();
       await loadOrders();
 
       if (orderIdParam) {
         openOrderDetail(parseInt(orderIdParam));
       }
+
+      // Tự động kiểm tra đơn mới mỗi 8 giây và phát âm báo
+      setInterval(async () => {
+        await loadOrdersBoard(true);
+      }, 8000);
     });
+
+    async function loadOrdersBoard(isPolling = false) {
+      const search = document.getElementById("admin-order-search").value.trim();
+      const dateVal = document.getElementById("admin-order-date-filter").value;
+      try {
+        const params = {};
+        if (search) params.search = search;
+        if (dateVal) params.date = dateVal;
+        const board = await api.get("/admin/orders/board", params);
+
+        if (lastKnownPendingId !== null && board.latest_pending_id > lastKnownPendingId) {
+          playNewOrderBeep();
+          showToast("🔔 Có đơn hàng đêm mới vừa đặt!", "warning");
+          await loadOrders();
+        }
+        lastKnownPendingId = board.latest_pending_id || 0;
+
+        document.getElementById("col-count-new").textContent = board.counts.new;
+        document.getElementById("col-count-prep").textContent = board.counts.preparing;
+        document.getElementById("col-count-deliv").textContent = board.counts.delivering;
+
+        renderKanbanColumn("col-orders-new", board.new_orders);
+        renderKanbanColumn("col-orders-prep", board.preparing_orders);
+        renderKanbanColumn("col-orders-deliv", board.delivering_orders);
+      } catch (err) {
+        if (!isPolling) console.warn(err);
+      }
+    }
+
+    function renderKanbanColumn(containerId, list) {
+      const el = document.getElementById(containerId);
+      if (!el) return;
+      if (!list || list.length === 0) {
+        el.innerHTML = `<div style="text-align:center; padding:24px 10px; color:var(--text-dim); font-size:0.84rem;">Không có đơn nào</div>`;
+        return;
+      }
+
+      el.innerHTML = list.map(o => {
+        let nextActionBtn = "";
+        if (o.status === "pending") {
+          nextActionBtn = `<button class="btn btn-primary" style="padding:4px 10px; font-size:0.78rem;" onclick="quickAdvanceStatus(${o.id}, 'confirmed', '${o.status}')">✅ Xác nhận</button>`;
+        } else if (o.status === "confirmed") {
+          nextActionBtn = `<button class="btn btn-primary" style="padding:4px 10px; font-size:0.78rem;" onclick="quickAdvanceStatus(${o.id}, 'preparing', '${o.status}')">🍳 Nấu món</button>`;
+        } else if (o.status === "preparing") {
+          nextActionBtn = `<button class="btn btn-primary" style="padding:4px 10px; font-size:0.78rem;" onclick="quickAdvanceStatus(${o.id}, 'delivering', '${o.status}')">🛵 Giao hàng</button>`;
+        } else if (o.status === "delivering") {
+          nextActionBtn = `<button class="btn btn-primary" style="padding:4px 10px; font-size:0.78rem; background:var(--success);" onclick="quickAdvanceStatus(${o.id}, 'completed', '${o.status}')">🎉 Hoàn thành</button>`;
+        }
+
+        const itemsSummary = (o.items || []).map(it => `
+          <div style="font-size:0.8rem; color:var(--text-muted);">
+            • <strong>${escapeHtml(it.dish_name)}</strong> ×${it.quantity}
+            ${it.option_name ? `<span style="color:var(--accent-primary);"> (${escapeHtml(it.option_name)})</span>` : ''}
+            ${it.note ? `<div style="color:var(--accent-secondary); font-size:0.75rem; padding-left:10px;">📝 ${escapeHtml(it.note)}</div>` : ''}
+          </div>
+        `).join("");
+
+        return `
+          <div style="padding:12px; background:var(--bg-main); border:1px solid var(--border-subtle); border-radius:var(--radius-sm);">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+              <strong style="color:var(--accent-secondary); font-size:0.95rem;">${escapeHtml(o.order_code)}</strong>
+              <span style="font-size:0.75rem; color:var(--text-dim);">${formatDateTime(o.created_at)}</span>
+            </div>
+            <div style="font-size:0.85rem; font-weight:700; margin-bottom:4px;">👤 ${escapeHtml(o.customer_name)} · 📞 ${escapeHtml(o.phone)}</div>
+            ${o.note ? `<div style="font-size:0.78rem; color:var(--warning); margin-bottom:6px;">📝 Ghi chú đơn: ${escapeHtml(o.note)}</div>` : ''}
+            <div style="margin-bottom:8px; padding:6px 8px; background:rgba(255,255,255,0.03); border-radius:6px;">
+              ${itemsSummary}
+            </div>
+            <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:6px;">
+              <strong style="color:var(--accent-secondary); font-size:0.9rem;">${formatVND(o.total_amount)}</strong>
+              <div style="display:flex; gap:4px;">
+                <button class="btn btn-secondary" style="padding:4px 8px; font-size:0.75rem;" onclick="openOrderDetail(${o.id})">Chi tiết</button>
+                ${nextActionBtn}
+              </div>
+            </div>
+          </div>
+        `;
+      }).join("");
+    }
+
+    async function quickAdvanceStatus(orderId, newStatus, currentStatus) {
+      try {
+        await api.patch(`/admin/orders/${orderId}/status`, {
+          status: newStatus,
+          expected_current_status: currentStatus,
+          note: `Nhân viên chuyển nhanh sang ${newStatus}`,
+        });
+        showToast("Đã chuyển trạng thái đơn hàng!", "success");
+        await loadOrdersBoard();
+        await loadOrders();
+      } catch (err) {
+        showToast(err.message, "error");
+      }
+    }
 
     async function loadOrders() {
       const tbody = document.getElementById("admin-orders-tbody");
       const search = document.getElementById("admin-order-search").value.trim();
       const statusFilter = document.getElementById("admin-order-status-filter").value;
+      const dateVal = document.getElementById("admin-order-date-filter")?.value || "";
 
       try {
         const params = { page: 1, page_size: 100 };
         if (search) params.search = search;
         if (statusFilter) params.status = statusFilter;
+        if (dateVal) params.date = dateVal;
 
         const res = await api.get("/admin/orders", params);
         const orders = res.items || [];
+        currentOrdersCache = orders;
 
         if (orders.length === 0) {
           tbody.innerHTML = `<tr><td colspan="8" style="text-align:center; padding:30px; color:var(--text-dim);">Không tìm thấy đơn hàng nào.</td></tr>`;
@@ -283,31 +457,80 @@
 
       if (st === "pending") {
         actionsEl.innerHTML = `
-          <button class="btn btn-danger" onclick="updateOrderStatus(${order.id}, 'cancelled', '${st}')">❌ Hủy Đơn</button>
+          <button class="btn btn-secondary" onclick="printOrderReceipt()">🖨️ In Phiếu Đơn</button>
+          <button class="btn btn-danger" onclick="promptCancelOrder(${order.id})">❌ Hủy Đơn</button>
           <button class="btn btn-primary" onclick="updateOrderStatus(${order.id}, 'confirmed', '${st}')">✅ Xác Nhận Đơn</button>
         `;
       } else if (st === "confirmed") {
         actionsEl.innerHTML = `
-          <button class="btn btn-danger" onclick="updateOrderStatus(${order.id}, 'cancelled', '${st}')">❌ Hủy Đơn</button>
+          <button class="btn btn-secondary" onclick="printOrderReceipt()">🖨️ In Phiếu Đơn</button>
+          <button class="btn btn-danger" onclick="promptCancelOrder(${order.id})">❌ Hủy Đơn</button>
           <button class="btn btn-primary" onclick="updateOrderStatus(${order.id}, 'preparing', '${st}')">🍳 Nấu Món (Chuẩn Bị)</button>
         `;
       } else if (st === "preparing") {
         actionsEl.innerHTML = `
-          <button class="btn btn-danger" onclick="updateOrderStatus(${order.id}, 'cancelled', '${st}')">❌ Hủy Đơn</button>
+          <button class="btn btn-secondary" onclick="printOrderReceipt()">🖨️ In Phiếu Đơn</button>
+          <button class="btn btn-danger" onclick="promptCancelOrder(${order.id})">❌ Hủy Đơn</button>
           <button class="btn btn-primary" onclick="updateOrderStatus(${order.id}, 'delivering', '${st}')">🛵 Giao Hàng Cho Shipper</button>
         `;
       } else if (st === "delivering") {
         actionsEl.innerHTML = `
+          <button class="btn btn-secondary" onclick="printOrderReceipt()">🖨️ In Phiếu Đơn</button>
           <button class="btn btn-primary" style="background-color:var(--success);" onclick="updateOrderStatus(${order.id}, 'completed', '${st}')">🎉 Đã Giao & Nhận Tiền COD (Hoàn Thành)</button>
         `;
       } else if (st === "completed" || st === "cancelled") {
         actionsEl.innerHTML = `
           <span style="color:var(--text-dim); font-size:0.85rem; margin-right:auto;">
-            Đơn hàng đã kết thúc ở trạng thái <strong>${st}</strong> (Không được đổi trạng thái nữa)
+            Đơn hàng đã kết thúc ở trạng thái <strong>${st}</strong>
           </span>
+          <button class="btn btn-secondary" onclick="printOrderReceipt()">🖨️ In Phiếu Đơn</button>
           <button class="btn btn-secondary" onclick="closeOrderModal()">Đóng</button>
         `;
       }
+    }
+
+    async function promptCancelOrder(orderId) {
+      const reason = prompt("Nhập lý do nhân viên huỷ đơn hàng (VD: Hết món, khách báo huỷ...):", "Hết món đột xuất");
+      if (!reason || !reason.trim()) return;
+      try {
+        await api.post(`/admin/orders/${orderId}/cancel`, { reason: reason.trim() });
+        showToast("Đã huỷ đơn hàng kèm lý do!", "info");
+        await openOrderDetail(orderId);
+        await loadOrdersBoard();
+        await loadOrders();
+      } catch (err) {
+        showToast(err.message, "error");
+      }
+    }
+
+    function printOrderReceipt() {
+      window.print();
+    }
+
+    function exportFilteredOrdersCSV() {
+      if (!currentOrdersCache || currentOrdersCache.length === 0) {
+        showToast("Không có đơn hàng nào để xuất", "warning");
+        return;
+      }
+      const headers = ["Mã đơn", "Khách hàng", "SĐT", "Địa chỉ", "Tổng tiền", "Thanh toán", "Trạng thái", "Thời gian"];
+      const rows = currentOrdersCache.map(o => [
+        o.order_code,
+        `"${(o.customer_name || '').replace(/"/g, '""')}"`,
+        o.phone,
+        `"${(o.address || '').replace(/"/g, '""')}"`,
+        o.total_amount,
+        o.payment_method,
+        o.status,
+        o.created_at,
+      ].join(","));
+      const csvContent = "\uFEFF" + [headers.join(","), ...rows].join("\n");
+      const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `NightFood_Orders_${new Date().toISOString().slice(0,10)}.csv`;
+      a.click();
+      URL.revokeObjectURL(url);
     }
 
     async function updateOrderStatus(orderId, newStatus, currentExpectedStatus) {
