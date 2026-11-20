@@ -51,4 +51,21 @@ class CartCalculationOut(BaseModel):
     discount_amount: int = 0
     total_amount: int = 0
     has_unavailable_item: bool = False
+    price_changed: bool = False
     warnings: list[str] = []
+
+
+class CartPreviewItem(BaseModel):
+    dish_id: int
+    quantity: int = Field(default=1, ge=1, le=99)
+    dish_option_id: int | None = None
+    selected_option_ids: list[int] | None = None
+    note: str | None = None
+    expected_unit_price: int | None = None
+
+
+class CartPreviewRequest(BaseModel):
+    items: list[CartPreviewItem] | None = None
+    area: str | None = "Nội thành"
+    voucher_code: str | None = None
+    expected_subtotal: int | None = None

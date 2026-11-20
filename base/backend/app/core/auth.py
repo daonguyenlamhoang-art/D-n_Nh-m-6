@@ -114,3 +114,37 @@ def get_current_admin(request: Request, db: Session = Depends(get_db)):
             },
         )
     return user
+
+
+# ----------------- HÀM TÍNH PHÍ SHIP THEO KHU VỰC (MODULE TÀI KHOẢN - T3D262C) -----------------
+SHIPPING_AREA_FEES: dict[str, int] = {
+    "Nội thành": 0,
+    "Cầu Giấy": 0,
+    "Đống Đa": 0,
+    "Ba Đình": 0,
+    "Quận lân cận": 15000,
+    "Thanh Xuân": 15000,
+    "Hai Bà Trưng": 15000,
+    "Tây Hồ": 15000,
+    "Ngoại thành": 25000,
+    "Hà Đông": 25000,
+    "Long Biên": 25000,
+    "Hoàng Mai": 20000,
+    "Nam Từ Liêm": 15000,
+    "Bắc Từ Liêm": 20000,
+}
+
+
+def calculate_shipping_fee(area: Optional[str] = "Nội thành") -> int:
+    """Tính phí giao hàng đêm theo khu vực địa chỉ nhận hàng."""
+    if not area:
+        return 0
+    clean = area.strip()
+    if clean in SHIPPING_AREA_FEES:
+        return SHIPPING_AREA_FEES[clean]
+    low = clean.lower()
+    if "ngoại thành" in low or "xa" in low or "hà đông" in low or "long biên" in low:
+        return 25000
+    if "lân cận" in low or "thanh xuân" in low or "tây hồ" in low or "từ liêm" in low:
+        return 15000
+    return 0
