@@ -114,7 +114,119 @@ function renderLayout() {
           </div>
         </div>
       </footer>
+
+      <!-- Nút Chat nổi & Khung Chat cho khách (Tự lấy tin mới mỗi 3 giây - T3D2DE9) -->
+      <button type="button" id="customer-chat-fab" class="chat-fab" title="Chat trực tuyến với NightFood">
+        💬
+      </button>
+      <div id="customer-chat-panel" class="chat-panel">
+        <div style="padding:12px 16px; background:var(--accent-primary); color:#fff; display:flex; justify-content:space-between; align-items:center;">
+          <div>
+            <div style="font-weight:800; font-size:0.95rem;">🌙 NightFood Hỗ Trợ Đêm</div>
+            <div style="font-size:0.75rem; opacity:0.9;">Trực tuyến · Tự cập nhật mỗi 3s</div>
+          </div>
+          <button type="button" id="btn-close-chat-panel" style="background:none; border:none; color:#fff; font-size:1.3rem; cursor:pointer;">&times;</button>
+        </div>
+        <div id="customer-chat-messages" style="flex:1; padding:12px; overflow-y:auto; display:flex; flex-direction:column; gap:8px; background:var(--bg-main); font-size:0.88rem;">
+          <div style="padding:8px 12px; background:var(--bg-card); border-radius:10px; color:var(--text-muted); align-self:flex-start; max-width:85%;">
+            Xin chào cú đêm! 🌙 Bạn cần tư vấn món ăn hay hỗ trợ đơn hàng ạ?
+          </div>
+        </div>
+        <form id="customer-chat-form" style="padding:10px; border-top:1px solid var(--border-color); display:flex; gap:8px; background:var(--bg-card);">
+          <input type="text" id="customer-chat-input" class="form-control" placeholder="Nhập tin nhắn..." style="padding:8px 10px; font-size:0.85rem;" maxlength="500" required>
+          <button type="submit" class="btn btn-primary" style="padding:8px 14px; font-size:0.85rem;">Gửi</button>
+        </form>
+      </div>
     `;
+  }
+  initCustomerChatWidget();
+}
+
+let chatPollTimer = null;
+let lastCustomerChatId = 0;
+
+function getChatGuestToken() {
+  if (typeof CartStorage !== "undefined" && CartStorage.getGuestToken) {
+    return CartStorage.getGuestToken();
+  }
+  let tok = localStorage.getItem("nightfood_guest_token");
+  if (!tok) {
+    tok = "nf_" + Math.random().toString(36).slice(2, 10);
+    localStorage.setItem("nightfood_guest_token", tok);
+  }
+  return tok;
+}
+
+function initCustomerChatWidget() {
+  const fab = document.getElementById("customer-chat-fab");
+  const panel = document.getElementById("customer-chat-panel");
+  const closeBtn = document.getElementById("btn-close-chat-panel");
+  const form = document.getElementById("customer-chat-form");
+  const input = document.getElementById("customer-chat-input");
+
+  if (!fab || !panel || fab.dataset.bound) return;
+  fab.dataset.bound = "1";
+
+  fab.addEventListener("click", () => {
+    const isActive = panel.classList.toggle("active");
+    if (isActive) {
+      pollCustomerChatMessages();
+      if (!chatPollTimer) {
+        chatPollTimer = setInterval(pollCustomerChatMessages, 3000);
+      }
+      if (input) input.focus();
+    }
+  });
+
+  if (closeBtn) {
+    closeBtn.addEventListener("click", () => {
+      panel.classList.remove("active");
+    });
+  }
+
+  if (form) {
+    form.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const text = input.value.trim();
+      if (!text) return;
+      input.value = "";
+      try {
+        await api.post("/chat/messages", {
+          guest_token: getChatGuestToken(),
+          customer_name: localStorage.getItem("nightfood_last_name") || "Khách hàng",
+          message: text,
+        });
+        await pollCustomerChatMessages();
+      } catch (err) {
+        showToast("Không thể gửi tin nhắn: " + err.message, "error");
+      }
+    });
+  }
+}
+
+async function pollCustomerChatMessages() {
+  const box = document.getElementById("customer-chat-messages");
+  if (!box) return;
+  try {
+    const msgs = await api.get("/chat/messages", {
+      guest_token: getChatGuestToken(),
+      since: lastCustomerChatId,
+    });
+    if (Array.isArray(msgs) && msgs.length > 0) {
+      msgs.forEach(m => {
+        if (m.id > lastCustomerChatId) lastCustomerChatId = m.id;
+        const div = document.createElement("div");
+        const isCustomer = m.sender_type === "customer";
+        div.style.cssText = isCustomer
+          ? "padding:8px 12px; background:var(--accent-primary); color:#fff; border-radius:10px; align-self:flex-end; max-width:85%; word-break:break-word;"
+          : "padding:8px 12px; background:var(--bg-card); color:var(--text-main); border:1px solid var(--border-color); border-radius:10px; align-self:flex-start; max-width:85%; word-break:break-word;";
+        div.textContent = m.message;
+        box.appendChild(div);
+      });
+      box.scrollTop = box.scrollHeight;
+    }
+  } catch (e) {
+    // ignore background polling error
   }
 }
 
