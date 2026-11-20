@@ -104,12 +104,21 @@ def get_current_admin(request: Request, db: Session = Depends(get_db)):
     from app.models.user import User
 
     user = db.query(User).filter(User.id == session_data["user_id"]).first()
-    if not user or not user.is_active or user.role != "admin":
+    if not user or not user.is_active:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail={
                 "code": "UNAUTHORIZED",
                 "message": "Tài khoản không hợp lệ hoặc đã bị vô hiệu hóa",
+                "details": {},
+            },
+        )
+    if user.role != "admin":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail={
+                "code": "FORBIDDEN_ADMIN_ONLY",
+                "message": "Khách hàng không có quyền truy cập API quản trị (T3D22C3)",
                 "details": {},
             },
         )

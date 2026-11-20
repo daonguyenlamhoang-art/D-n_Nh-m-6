@@ -159,9 +159,33 @@
     width: 100%;
     border-right: none;
     border-bottom: 1px solid var(--border-color);
+    padding: 12px 0;
   }
   .admin-menu {
     display: flex;
     overflow-x: auto;
+    gap: 6px;
+    padding: 8px 12px;
   }
+  .admin-menu li {
+    margin-bottom: 0;
+    flex-shrink: 0;
+  }
+  .admin-topbar {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 12px;
+  }
+  .admin-main {
+    padding: 16px 12px;
+  }
+}
+
+.admin-state-box {
+  text-align: center;
+  padding: 36px 20px;
+  color: var(--text-dim);
+}
+.admin-state-box.error {
+  color: var(--danger);
 }
