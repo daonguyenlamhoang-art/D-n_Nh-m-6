@@ -3,6 +3,14 @@ from datetime import datetime
 from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.db.session import Base
+from app.core.order_workflow import (
+    ORDER_STATUS_LABELS,
+    VALID_STATUS_TRANSITIONS,
+    CUSTOMER_CANCELLABLE_STATUSES,
+    STAFF_CANCELLABLE_STATUSES,
+    TERMINAL_STATUSES,
+    can_transition_status,
+)
 
 
 class Order(Base):
@@ -72,3 +80,4 @@ class OrderStatusHistory(Base):
     changed_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
     order = relationship("Order", back_populates="status_histories")
+    changer = relationship("User")
