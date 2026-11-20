@@ -345,9 +345,12 @@
             <td style="color:var(--accent-secondary); font-weight:700;">${formatVND(order.total_amount)}</td>
             <td style="font-size:0.85rem; color:var(--text-dim);">${formatDateTime(order.created_at)}</td>
             <td><span class="badge-status badge-${order.status}">${escapeHtml(order.status)}</span></td>
-            <td>
+            <td style="display:flex; gap:6px; flex-wrap:wrap;">
               <button class="btn btn-secondary" style="padding:4px 10px; font-size:0.8rem;" onclick="openOrderDetail(${order.id})">
                 Chi tiết & Xử lý
+              </button>
+              <button class="btn btn-secondary" style="padding:4px 8px; font-size:0.8rem;" onclick="printSingleOrderById(${order.id})" title="In phiếu bếp/giao hàng">
+                🖨️ In phiếu
               </button>
             </td>
           </tr>
@@ -501,6 +504,13 @@
       } catch (err) {
         showToast(err.message, "error");
       }
+    }
+
+    async function printSingleOrderById(orderId) {
+      await openOrderDetail(orderId);
+      setTimeout(() => {
+        window.print();
+      }, 250);
     }
 
     function printOrderReceipt() {
