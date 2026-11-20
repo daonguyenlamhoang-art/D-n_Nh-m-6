@@ -1,6 +1,9 @@
 """Router Quản trị viên (Admin) (FR-08..12, FR-15, BR-08..11, TC-14..22, TC-32, TC-34..35)."""
+import os
+import time
+import uuid
 from typing import Optional
-from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response, status
+from fastapi import APIRouter, Depends, File, HTTPException, Query, Request, Response, UploadFile, status
 from sqlalchemy import func
 from sqlalchemy.orm import Session, joinedload
 
@@ -20,13 +23,21 @@ from app.core.rate_limit import (
 )
 from app.db.session import get_db
 from app.models.category import Category
-from app.models.dish import Dish
-from app.models.order import Order, OrderStatusHistory
+from app.models.dish import Dish, DishOption
+from app.models.order import Order, OrderItem, OrderStatusHistory
 from app.models.user import User
 from app.models.voucher import Voucher
+from app.routers.dishes import enrich_dishes_list
 from app.schemas.admin import AdminLoginRequest, AdminUserOut, DashboardStatsOut
 from app.schemas.category import CategoryCreate, CategoryOut, CategoryReorderItem, CategoryUpdate
-from app.schemas.dish import DishCreate, DishOut, DishUpdate
+from app.schemas.dish import (
+    DishCreate,
+    DishOptionCreate,
+    DishOptionOut,
+    DishOptionUpdate,
+    DishOut,
+    DishUpdate,
+)
 from app.schemas.order import OrderCancelRequest, OrderOut, OrderStatusUpdate
 
 router = APIRouter(prefix="/admin", tags=["Admin"])
@@ -156,21 +167,55 @@ def get_dashboard_stats(
     )
 
 
-# ----------------- QUẢN LÝ MÓN ĂN (FR-09) -----------------
+# ----------------- QUẢN LÝ MÓN ĂN & TUỲ CHỌN (FR-09, T3D1FB5) -----------------
+@router.post("/upload-image")
+async def admin_upload_dish_image(
+    file: UploadFile = File(...),
+    current_admin: User = Depends(get_current_admin),
+):
+    """Upload file ảnh món ăn lưu vào frontend/assets/uploads (T3D1FB5)."""
+    ext = os.path.splitext(file.filename or "image.png")[1].lower()
+    if ext not in [".png", ".jpg", ".jpeg", ".webp", ".gif", ".svg"]:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={"code": "INVALID_IMAGE_TYPE", "message": "Định dạng ảnh không hợp lệ (chỉ hỗ trợ PNG, JPG, WEBP, GIF, SVG)", "details": {}},
+        )
+    uploads_dir = os.path.abspath(
+        os.path.join(os.path.dirname(__file__), "..", "..", "..", "frontend", "assets", "uploads")
+    )
+    os.makedirs(uploads_dir, exist_ok=True)
+    safe_name = f"dish_{int(time.time())}_{uuid.uuid4().hex[:6]}{ext}"
+    file_path = os.path.join(uploads_dir, safe_name)
+    content = await file.read()
+    with open(file_path, "wb") as f:
+        f.write(content)
+    return {"image_url": f"/assets/uploads/{safe_name}", "filename": safe_name}
+
+
 @router.get("/dishes")
 def admin_get_dishes(
     search: Optional[str] = Query(None, max_length=100),
     category_id: Optional[int] = None,
+    status_filter: Optional[str] = Query(None, alias="status"),
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
     db: Session = Depends(get_db),
     current_admin: User = Depends(get_current_admin),
 ):
-    """Xem toàn bộ món ăn (kể cả món đã ẩn) kèm phân trang và tìm kiếm (FR-09)."""
+    """Xem toàn bộ món ăn (kể cả món đã ẩn) kèm phân trang, lọc trạng thái và tìm kiếm (FR-09, T3D1FB5)."""
     query = db.query(Dish).options(joinedload(Dish.category), joinedload(Dish.options))
 
     if category_id:
         query = query.filter(Dish.category_id == category_id)
+
+    if status_filter:
+        st = status_filter.strip().upper()
+        if st == "HIDDEN":
+            query = query.filter((Dish.is_active == False) | (Dish.status == "HIDDEN"))
+        elif st == "OUT_OF_STOCK":
+            query = query.filter(Dish.is_active == True, (Dish.is_available == False) | (Dish.status == "OUT_OF_STOCK"))
+        elif st == "AVAILABLE":
+            query = query.filter(Dish.is_active == True, Dish.is_available == True)
 
     if search:
         clean = search.strip()
@@ -179,12 +224,7 @@ def admin_get_dishes(
 
     total = query.count()
     dishes = query.order_by(Dish.id.desc()).offset((page - 1) * page_size).limit(page_size).all()
-
-    items = []
-    for d in dishes:
-        dto = DishOut.model_validate(d)
-        dto.category_name = d.category.name if d.category else None
-        items.append(dto)
+    items = enrich_dishes_list(db, dishes)
 
     return {"total": total, "page": page, "page_size": page_size, "items": items}
 
@@ -195,7 +235,7 @@ def admin_create_dish(
     db: Session = Depends(get_db),
     current_admin: User = Depends(get_current_admin),
 ):
-    """Thêm món ăn mới vào thực đơn (FR-09, TC-17, TC-18)."""
+    """Thêm món ăn mới kèm cấu hình nhóm tuỳ chọn (Size, Topping) (FR-09, T3D1FB5)."""
     cat = db.query(Category).filter(Category.id == dish_in.category_id).first()
     if not cat:
         raise HTTPException(
@@ -215,16 +255,33 @@ def admin_create_dish(
         description=dish_in.description.strip() if dish_in.description else None,
         price=dish_in.price,
         image_url=dish_in.image_url.strip() if dish_in.image_url else None,
+        status=dish_in.status or "AVAILABLE",
         is_available=dish_in.is_available,
         is_active=dish_in.is_active,
+        is_featured=dish_in.is_featured,
+        is_combo=dish_in.is_combo,
+        combo_items_json=dish_in.combo_items_json,
     )
+    new_dish.sync_status_flags()
     db.add(new_dish)
+    db.flush()
+
+    if dish_in.options:
+        for opt_in in dish_in.options:
+            opt = DishOption(
+                dish_id=new_dish.id,
+                option_group=opt_in.option_group.strip() or "Topping",
+                option_name=opt_in.option_name.strip(),
+                extra_price=opt_in.extra_price,
+                is_required=opt_in.is_required,
+                max_select=opt_in.max_select,
+                is_active=opt_in.is_active,
+            )
+            db.add(opt)
+
     db.commit()
     db.refresh(new_dish)
-
-    dto = DishOut.model_validate(new_dish)
-    dto.category_name = cat.name
-    return dto
+    return enrich_dishes_list(db, [new_dish])[0]
 
 
 @router.put("/dishes/{dish_id}", response_model=DishOut)
@@ -234,8 +291,8 @@ def admin_update_dish(
     db: Session = Depends(get_db),
     current_admin: User = Depends(get_current_admin),
 ):
-    """Cập nhật thông tin món ăn hoặc ẩn món (soft delete) (FR-09, TC-19)."""
-    dish = db.query(Dish).filter(Dish.id == dish_id).first()
+    """Cập nhật thông tin món ăn, nhóm tuỳ chọn hoặc ẩn món (FR-09, T3D1FB5)."""
+    dish = db.query(Dish).filter(Dish.id == dish_id).options(joinedload(Dish.options), joinedload(Dish.category)).first()
     if not dish:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -264,17 +321,155 @@ def admin_update_dish(
         dish.price = dish_in.price
     if dish_in.image_url is not None:
         dish.image_url = dish_in.image_url.strip() if dish_in.image_url else None
+    if dish_in.is_featured is not None:
+        dish.is_featured = dish_in.is_featured
+    if dish_in.is_combo is not None:
+        dish.is_combo = dish_in.is_combo
+    if dish_in.combo_items_json is not None:
+        dish.combo_items_json = dish_in.combo_items_json
+
+    if dish_in.status is not None:
+        dish.status = dish_in.status
+        if dish.status == "HIDDEN":
+            dish.is_active = False
+        elif dish.status == "OUT_OF_STOCK":
+            dish.is_active = True
+            dish.is_available = False
+        elif dish.status == "AVAILABLE":
+            dish.is_active = True
+            dish.is_available = True
+
     if dish_in.is_available is not None:
         dish.is_available = dish_in.is_available
     if dish_in.is_active is not None:
         dish.is_active = dish_in.is_active
 
+    dish.sync_status_flags()
+
+    if dish_in.options is not None:
+        db.query(DishOption).filter(DishOption.dish_id == dish.id).delete()
+        for opt_in in dish_in.options:
+            db.add(
+                DishOption(
+                    dish_id=dish.id,
+                    option_group=opt_in.option_group.strip() or "Topping",
+                    option_name=opt_in.option_name.strip(),
+                    extra_price=opt_in.extra_price,
+                    is_required=opt_in.is_required,
+                    max_select=opt_in.max_select,
+                    is_active=opt_in.is_active,
+                )
+            )
+
     db.commit()
     db.refresh(dish)
+    return enrich_dishes_list(db, [dish])[0]
 
-    dto = DishOut.model_validate(dish)
-    dto.category_name = dish.category.name if dish.category else None
-    return dto
+
+@router.delete("/dishes/{dish_id}")
+def admin_delete_or_hide_dish(
+    dish_id: int,
+    db: Session = Depends(get_db),
+    current_admin: User = Depends(get_current_admin),
+):
+    """Xoá món ăn: Nếu món đã từng có trong đơn hàng thì chỉ chuyển sang Ẩn (T3D1FB5)."""
+    dish = db.query(Dish).filter(Dish.id == dish_id).first()
+    if not dish:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail={"code": "DISH_NOT_FOUND", "message": "Không tìm thấy món ăn", "details": {}},
+        )
+
+    order_ref_count = db.query(func.count(OrderItem.id)).filter(OrderItem.dish_id == dish_id).scalar() or 0
+    if order_ref_count > 0:
+        dish.is_active = False
+        dish.status = "HIDDEN"
+        db.commit()
+        return {
+            "action": "hidden",
+            "dish_id": dish_id,
+            "message": f"Món '{dish.name}' đã có trong {order_ref_count} dòng đơn hàng nên hệ thống chỉ chuyển sang trạng thái Ẩn.",
+        }
+
+    db.delete(dish)
+    db.commit()
+    return {
+        "action": "deleted",
+        "dish_id": dish_id,
+        "message": f"Đã xoá hoàn toàn món '{dish.name}'",
+    }
+
+
+@router.post("/dishes/{dish_id}/options", response_model=DishOptionOut, status_code=status.HTTP_201_CREATED)
+def admin_add_dish_option(
+    dish_id: int,
+    opt_in: DishOptionCreate,
+    db: Session = Depends(get_db),
+    current_admin: User = Depends(get_current_admin),
+):
+    """Thêm tuỳ chọn (Size / Topping) cho món ăn (T3D1FB5)."""
+    dish = db.query(Dish).filter(Dish.id == dish_id).first()
+    if not dish:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail={"code": "DISH_NOT_FOUND", "message": "Không tìm thấy món ăn", "details": {}},
+        )
+    opt = DishOption(
+        dish_id=dish_id,
+        option_group=opt_in.option_group.strip() or "Topping",
+        option_name=opt_in.option_name.strip(),
+        extra_price=opt_in.extra_price,
+        is_required=opt_in.is_required,
+        max_select=opt_in.max_select,
+        is_active=opt_in.is_active,
+    )
+    db.add(opt)
+    db.commit()
+    db.refresh(opt)
+    return DishOptionOut.model_validate(opt)
+
+
+@router.put("/dishes/{dish_id}/options/{option_id}", response_model=DishOptionOut)
+def admin_update_dish_option(
+    dish_id: int,
+    option_id: int,
+    opt_in: DishOptionUpdate,
+    db: Session = Depends(get_db),
+    current_admin: User = Depends(get_current_admin),
+):
+    """Cập nhật tuỳ chọn của món ăn (T3D1FB5)."""
+    opt = db.query(DishOption).filter(DishOption.id == option_id, DishOption.dish_id == dish_id).first()
+    if not opt:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail={"code": "OPTION_NOT_FOUND", "message": "Không tìm thấy tuỳ chọn", "details": {}},
+        )
+    for field in ["option_group", "option_name", "extra_price", "is_required", "max_select", "is_active"]:
+        val = getattr(opt_in, field)
+        if val is not None:
+            setattr(opt, field, val.strip() if isinstance(val, str) else val)
+    db.commit()
+    db.refresh(opt)
+    return DishOptionOut.model_validate(opt)
+
+
+@router.delete("/dishes/{dish_id}/options/{option_id}")
+def admin_delete_dish_option(
+    dish_id: int,
+    option_id: int,
+    db: Session = Depends(get_db),
+    current_admin: User = Depends(get_current_admin),
+):
+    """Xoá tuỳ chọn của món ăn (T3D1FB5)."""
+    opt = db.query(DishOption).filter(DishOption.id == option_id, DishOption.dish_id == dish_id).first()
+    if not opt:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail={"code": "OPTION_NOT_FOUND", "message": "Không tìm thấy tuỳ chọn", "details": {}},
+        )
+    db.delete(opt)
+    db.commit()
+    return {"deleted": True, "option_id": option_id}
 
 
 # ----------------- QUẢN LÝ DANH MỤC (FR-10, T3D1F9B) -----------------
