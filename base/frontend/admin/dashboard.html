@@ -3,13 +3,12 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Dashboard Quản Trị | NightFood</title>
+  <title>Dashboard Thống Kê Quản Trị | NightFood (T3D2E11)</title>
   <link rel="stylesheet" href="../css/style.css">
   <link rel="stylesheet" href="../css/admin.css">
 </head>
 <body data-root="../">
   <div class="admin-layout">
-    <!-- Sidebar -->
     <aside class="admin-sidebar">
       <div class="admin-sidebar-header">
         <a href="dashboard.html" class="brand-logo">
@@ -24,6 +23,8 @@
         <li><a href="orders.html">📦 Quản Lý Đơn Hàng</a></li>
         <li><a href="dishes.html">🍜 Quản Lý Thực Đơn</a></li>
         <li><a href="categories.html">📑 Quản Lý Danh Mục</a></li>
+        <li><a href="vouchers.html">🎟️ Mã Giảm Giá & Đánh Giá</a></li>
+        <li><a href="chat.html">💬 Chat Khách Hàng</a></li>
         <li><a href="../index.html" target="_blank">🌐 Xem Trang Khách Hàng ↗</a></li>
       </ul>
 
@@ -34,16 +35,14 @@
       </div>
     </aside>
 
-    <!-- Main Content -->
     <main class="admin-main">
       <div class="admin-topbar">
         <div>
-          <h1 style="font-size:1.6rem; font-weight:800; color:var(--text-main);">Tổng Quan Kinh Doanh Đêm</h1>
-          <p style="color:var(--text-muted); font-size:0.88rem;">Theo dõi nhanh đơn hàng, doanh thu và trạng thái quán (FR-15)</p>
+          <h1 style="font-size:1.6rem; font-weight:800; color:var(--text-main);">Thống Kê Kinh Doanh Đêm (Dashboard - T3D2E11)</h1>
+          <p style="color:var(--text-muted); font-size:0.88rem;">Doanh thu theo ngày/tháng, số đơn theo trạng thái, món bán chạy, điểm đánh giá & mã giảm giá</p>
         </div>
 
-        <div style="display:flex; align-items:center; gap:16px;">
-          <!-- Nút bật tắt chế độ ép mở cửa phục vụ kiểm thử (FR-14, TC-39) -->
+        <div style="display:flex; align-items:center; gap:14px; flex-wrap:wrap;">
           <button id="btn-store-toggle" class="btn btn-secondary" style="font-size:0.85rem; padding:6px 12px;">
             ⏰ Trạng thái mở cửa
           </button>
@@ -55,8 +54,33 @@
         </div>
       </div>
 
-      <!-- Thống kê chỉ số (FR-15) -->
-      <div class="stats-grid">
+      <!-- Bộ lọc khoảng thời gian và nhóm ngày/tháng (T3D2E11) -->
+      <div class="card-panel" style="padding:14px 18px; margin-bottom:22px; display:flex; align-items:center; gap:14px; flex-wrap:wrap;">
+        <div style="display:flex; align-items:center; gap:8px;">
+          <span style="font-size:0.85rem; color:var(--text-dim);">Từ ngày:</span>
+          <input type="date" id="dash-date-from" class="form-control" style="width:auto; padding:6px 10px; font-size:0.85rem;">
+        </div>
+        <div style="display:flex; align-items:center; gap:8px;">
+          <span style="font-size:0.85rem; color:var(--text-dim);">Đến ngày:</span>
+          <input type="date" id="dash-date-to" class="form-control" style="width:auto; padding:6px 10px; font-size:0.85rem;">
+        </div>
+        <div style="display:flex; align-items:center; gap:8px;">
+          <span style="font-size:0.85rem; color:var(--text-dim);">Nhóm theo:</span>
+          <select id="dash-group-by" class="form-control" style="width:auto; padding:6px 10px; font-size:0.85rem;">
+            <option value="day">Theo Ngày</option>
+            <option value="month">Theo Tháng</option>
+          </select>
+        </div>
+        <button type="button" id="btn-filter-dashboard" class="btn btn-primary" style="padding:7px 16px; font-size:0.85rem;">
+          📊 Lọc Thống Kê
+        </button>
+        <button type="button" id="btn-export-revenue-csv" class="btn btn-secondary" style="padding:7px 14px; font-size:0.85rem; margin-left:auto;">
+          📥 Xuất CSV Doanh Thu
+        </button>
+      </div>
+
+      <!-- 6 Chỉ số KPI tổng hợp (T3D2E11) -->
+      <div class="stats-grid" style="grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));">
         <div class="stat-card">
           <div class="stat-icon">📦</div>
           <div class="stat-info">
@@ -68,7 +92,7 @@
         <div class="stat-card">
           <div class="stat-icon" style="background-color:rgba(245,158,11,0.15); color:var(--warning);">⏳</div>
           <div class="stat-info">
-            <h4>Đơn Chờ Xác Nhận</h4>
+            <h4>Chờ Xác Nhận</h4>
             <div id="stat-pending-orders" class="stat-value" style="color:var(--warning);">0</div>
           </div>
         </div>
@@ -88,102 +112,232 @@
             <div id="stat-total-revenue" class="stat-value" style="color:var(--accent-secondary);">0đ</div>
           </div>
         </div>
-      </div>
 
-      <!-- Đơn hàng gần nhất -->
-      <div class="card-panel">
-        <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:18px;">
-          <h2 style="font-size:1.15rem; font-weight:700;">Đơn Hàng Mới Nhất Cần Xử Lý</h2>
-          <a href="orders.html" class="btn btn-secondary" style="font-size:0.82rem; padding:4px 10px;">Xem toàn bộ đơn →</a>
+        <div class="stat-card">
+          <div class="stat-icon" style="background-color:rgba(59,130,246,0.15); color:#60a5fa;">⭐</div>
+          <div class="stat-info">
+            <h4>Điểm Đánh Giá TB</h4>
+            <div id="stat-avg-rating" class="stat-value" style="color:#60a5fa;">5.0 ★</div>
+          </div>
         </div>
 
-        <div class="table-responsive">
-          <table class="data-table">
-            <thead>
-              <tr>
-                <th>Mã đơn</th>
-                <th>Khách hàng</th>
-                <th>Số điện thoại</th>
-                <th>Thời gian đặt</th>
-                <th>Tổng tiền</th>
-                <th>Trạng thái</th>
-                <th>Hành động</th>
-              </tr>
-            </thead>
-            <tbody id="recent-orders-tbody">
-              <tr>
-                <td colspan="7" style="text-align:center; color:var(--text-dim); padding:24px;">Đang tải dữ liệu...</td>
-              </tr>
-            </tbody>
-          </table>
+        <div class="stat-card">
+          <div class="stat-icon" style="background-color:rgba(168,85,247,0.15); color:#c084fc;">🎟️</div>
+          <div class="stat-info">
+            <h4>Mã Giảm Đã Dùng</h4>
+            <div id="stat-vouchers-used" class="stat-value" style="color:#c084fc;">0</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Biểu đồ Chart.js: Doanh thu theo ngày/tháng & Số đơn theo trạng thái (T3D2E11) -->
+      <div style="display:grid; grid-template-columns: 1.6fr 1fr; gap:22px; margin-bottom:24px;">
+        <div class="card-panel" style="margin-bottom:0;">
+          <h3 style="font-size:1.1rem; font-weight:700; margin-bottom:14px;">📈 Biểu Đồ Doanh Thu Theo Thời Gian</h3>
+          <canvas id="revenueChart" height="140"></canvas>
+        </div>
+
+        <div class="card-panel" style="margin-bottom:0;">
+          <h3 style="font-size:1.1rem; font-weight:700; margin-bottom:14px;">📊 Tỷ Lệ Đơn Hàng Theo Trạng Thái</h3>
+          <canvas id="statusChart" height="190"></canvas>
+        </div>
+      </div>
+
+      <!-- Bảng Món Bán Chạy & Đơn Hàng Mới Nhất -->
+      <div style="display:grid; grid-template-columns: 1fr 1.4fr; gap:22px;">
+        <div class="card-panel">
+          <h3 style="font-size:1.1rem; font-weight:700; margin-bottom:14px;">🔥 Top Món Bán Chạy Nhất</h3>
+          <div class="table-responsive">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>Món ăn</th>
+                  <th>SL đã bán</th>
+                  <th>Doanh thu</th>
+                </tr>
+              </thead>
+              <tbody id="top-dishes-tbody">
+                <tr><td colspan="3" style="text-align:center; color:var(--text-dim);">Đang tải...</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <div class="card-panel">
+          <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:14px;">
+            <h3 style="font-size:1.1rem; font-weight:700;">📦 Đơn Hàng Mới Nhất Cần Xử Lý</h3>
+            <a href="orders.html" class="btn btn-secondary" style="font-size:0.82rem; padding:4px 10px;">Xem toàn bộ đơn →</a>
+          </div>
+          <div class="table-responsive">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>Mã đơn</th>
+                  <th>Khách hàng</th>
+                  <th>Tổng tiền</th>
+                  <th>Trạng thái</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody id="recent-orders-tbody">
+                <tr><td colspan="5" style="text-align:center; color:var(--text-dim);">Đang tải...</td></tr>
+              </tbody>
+            </table>
+          </div>
         </div>
       </div>
     </main>
   </div>
 
   <script src="https://cdn.jsdelivr.net/npm/axios@1.7.9/dist/axios.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
   <script src="../js/config.js"></script>
   <script src="../js/utils.js"></script>
   <script src="../js/api.js"></script>
   <script src="../js/pages/admin.js"></script>
   <script>
+    let revChartInstance = null;
+    let stChartInstance = null;
+    let lastAnalyticsData = null;
+
     document.addEventListener("DOMContentLoaded", async () => {
       const user = await checkAdminAuth();
       if (!user) return;
 
       document.getElementById("btn-admin-logout").addEventListener("click", handleAdminLogout);
       document.getElementById("btn-store-toggle").addEventListener("click", toggleStoreStatus);
+      document.getElementById("btn-filter-dashboard").addEventListener("click", loadDashboardData);
+      document.getElementById("btn-export-revenue-csv").addEventListener("click", exportRevenueCSV);
 
       await loadDashboardData();
     });
 
     async function loadDashboardData() {
-      try {
-        // Tải số liệu thống kê (FR-15)
-        const stats = await api.get("/admin/dashboard/stats");
-        document.getElementById("stat-total-orders").textContent = stats.total_orders;
-        document.getElementById("stat-pending-orders").textContent = stats.pending_orders;
-        document.getElementById("stat-completed-orders").textContent = stats.completed_orders;
-        document.getElementById("stat-total-revenue").textContent = formatVND(stats.total_revenue);
+      const dateFrom = document.getElementById("dash-date-from").value;
+      const dateTo = document.getElementById("dash-date-to").value;
+      const groupBy = document.getElementById("dash-group-by").value;
 
-        // Tải đơn hàng gần nhất
+      try {
+        const params = { group_by: groupBy };
+        if (dateFrom) params.date_from = dateFrom;
+        if (dateTo) params.date_to = dateTo;
+
+        const analytics = await api.get("/admin/dashboard/analytics", params);
+        lastAnalyticsData = analytics;
+
+        const stMap = analytics.orders_by_status || {};
+        document.getElementById("stat-total-orders").textContent = analytics.total_orders;
+        document.getElementById("stat-pending-orders").textContent = stMap.pending || 0;
+        document.getElementById("stat-completed-orders").textContent = stMap.completed || 0;
+        document.getElementById("stat-total-revenue").textContent = formatVND(analytics.total_revenue);
+        document.getElementById("stat-avg-rating").textContent = `${analytics.avg_rating} ★`;
+        document.getElementById("stat-vouchers-used").textContent = analytics.vouchers_used_count;
+
+        renderCharts(analytics);
+        renderTopDishes(analytics.top_dishes || []);
+
         const ordersRes = await api.get("/admin/orders", { page: 1, page_size: 5 });
         const tbody = document.getElementById("recent-orders-tbody");
-
         if (!ordersRes.items || ordersRes.items.length === 0) {
-          tbody.innerHTML = `
+          tbody.innerHTML = `<tr><td colspan="5" style="text-align:center; color:var(--text-dim);">Chưa có đơn hàng nào.</td></tr>`;
+        } else {
+          tbody.innerHTML = ordersRes.items.map(order => `
             <tr>
-              <td colspan="7" style="text-align:center; color:var(--text-dim); padding:24px;">Chưa có đơn hàng nào được tạo.</td>
+              <td><strong style="color:var(--accent-secondary);">${escapeHtml(order.order_code)}</strong></td>
+              <td>${escapeHtml(order.customer_name)}</td>
+              <td style="color:var(--accent-secondary); font-weight:700;">${formatVND(order.total_amount)}</td>
+              <td><span class="badge-status badge-${order.status}">${escapeHtml(order.status)}</span></td>
+              <td><a href="orders.html?id=${order.id}" class="btn btn-secondary" style="padding:4px 8px; font-size:0.78rem;">Xử lý</a></td>
             </tr>
-          `;
-          return;
+          `).join("");
         }
 
-        tbody.innerHTML = ordersRes.items.map(order => `
-          <tr>
-            <td><strong style="color:var(--accent-secondary);">${escapeHtml(order.order_code)}</strong></td>
-            <td>${escapeHtml(order.customer_name)}</td>
-            <td>${escapeHtml(order.phone)}</td>
-            <td>${formatDateTime(order.created_at)}</td>
-            <td style="color:var(--accent-secondary); font-weight:700;">${formatVND(order.total_amount)}</td>
-            <td><span class="badge-status badge-${order.status}">${escapeHtml(order.status)}</span></td>
-            <td>
-              <a href="orders.html?id=${order.id}" class="btn btn-secondary" style="padding:4px 8px; font-size:0.8rem;">Xem chi tiết</a>
-            </td>
-          </tr>
-        `).join("");
-
-        // Cập nhật text nút kiểm thử store
         const storeStatus = await api.get("/store/status");
         const statusBtn = document.getElementById("btn-store-toggle");
         if (statusBtn) {
           statusBtn.textContent = storeStatus.force_open ? "⚡ Đang Ép Mở (Click để tắt)" : "🌙 Tuân theo giờ thật (18h-2h)";
           statusBtn.className = storeStatus.force_open ? "btn btn-primary" : "btn btn-secondary";
         }
-
       } catch (err) {
         showToast("Lỗi tải dashboard: " + err.message, "error");
       }
+    }
+
+    function renderCharts(analytics) {
+      if (typeof Chart === "undefined") return;
+
+      const series = analytics.revenue_series || [];
+      const labels = series.length ? series.map(s => s.period) : ["Hôm nay"];
+      const revValues = series.length ? series.map(s => s.revenue) : [0];
+
+      const revCtx = document.getElementById("revenueChart");
+      if (revChartInstance) revChartInstance.destroy();
+      revChartInstance = new Chart(revCtx, {
+        type: "bar",
+        data: {
+          labels,
+          datasets: [{
+            label: "Doanh thu (VND)",
+            data: revValues,
+            backgroundColor: "rgba(249, 115, 22, 0.75)",
+            borderColor: "#F97316",
+            borderWidth: 1,
+            borderRadius: 6,
+          }]
+        },
+        options: {
+          responsive: true,
+          plugins: { legend: { labels: { color: "#CBD5E1" } } },
+          scales: {
+            x: { ticks: { color: "#94A3B8" } },
+            y: { ticks: { color: "#94A3B8" } }
+          }
+        }
+      });
+
+      const st = analytics.orders_by_status || {};
+      const stCtx = document.getElementById("statusChart");
+      if (stChartInstance) stChartInstance.destroy();
+      stChartInstance = new Chart(stCtx, {
+        type: "doughnut",
+        data: {
+          labels: ["Chờ xác nhận", "Đã xác nhận", "Đang chuẩn bị", "Đang giao", "Hoàn thành", "Đã huỷ"],
+          datasets: [{
+            data: [st.pending || 0, st.confirmed || 0, st.preparing || 0, st.delivering || 0, st.completed || 0, st.cancelled || 0],
+            backgroundColor: ["#F59E0B", "#3B82F6", "#A855F7", "#F97316", "#22C55E", "#EF4444"],
+          }]
+        },
+        options: {
+          responsive: true,
+          plugins: { legend: { position: "bottom", labels: { color: "#CBD5E1" } } }
+        }
+      });
+    }
+
+    function renderTopDishes(topDishes) {
+      const tbody = document.getElementById("top-dishes-tbody");
+      if (!topDishes.length) {
+        tbody.innerHTML = `<tr><td colspan="3" style="text-align:center; color:var(--text-dim);">Chưa có dữ liệu bán hàng</td></tr>`;
+        return;
+      }
+      tbody.innerHTML = topDishes.map(d => `
+        <tr>
+          <td><strong>${escapeHtml(d.dish_name)}</strong></td>
+          <td><span class="badge-tag">${d.sold_quantity} suất</span></td>
+          <td style="color:var(--accent-secondary); font-weight:700;">${formatVND(d.revenue)}</td>
+        </tr>
+      `).join("");
+    }
+
+    function exportRevenueCSV() {
+      const dateFrom = document.getElementById("dash-date-from").value;
+      const dateTo = document.getElementById("dash-date-to").value;
+      let url = `${CONFIG.API_BASE_URL}/admin/reports/revenue-csv`;
+      const q = [];
+      if (dateFrom) q.push(`date_from=${encodeURIComponent(dateFrom)}`);
+      if (dateTo) q.push(`date_to=${encodeURIComponent(dateTo)}`);
+      if (q.length) url += "?" + q.join("&");
+      window.open(url, "_blank");
     }
   </script>
 </body>
