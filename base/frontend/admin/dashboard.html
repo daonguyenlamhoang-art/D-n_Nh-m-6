@@ -329,15 +329,24 @@
       `).join("");
     }
 
-    function exportRevenueCSV() {
+    async function exportRevenueCSV() {
       const dateFrom = document.getElementById("dash-date-from").value;
       const dateTo = document.getElementById("dash-date-to").value;
-      let url = `${CONFIG.API_BASE_URL}/admin/reports/revenue-csv`;
-      const q = [];
-      if (dateFrom) q.push(`date_from=${encodeURIComponent(dateFrom)}`);
-      if (dateTo) q.push(`date_to=${encodeURIComponent(dateTo)}`);
-      if (q.length) url += "?" + q.join("&");
-      window.open(url, "_blank");
+      try {
+        const params = {};
+        if (dateFrom) params.date_from = dateFrom;
+        if (dateTo) params.date_to = dateTo;
+        const res = await http.get("/admin/reports/revenue-csv", { params, responseType: "blob" });
+        const url = URL.createObjectURL(new Blob([res.data], { type: "text/csv;charset=utf-8;" }));
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = `NightFood_Revenue_${new Date().toISOString().slice(0, 10)}.csv`;
+        a.click();
+        URL.revokeObjectURL(url);
+        showToast("Đã xuất báo cáo doanh thu ra CSV!", "success");
+      } catch (err) {
+        showToast("Lỗi xuất CSV: " + err.message, "error");
+      }
     }
   </script>
 </body>

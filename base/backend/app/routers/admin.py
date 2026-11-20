@@ -1,4 +1,6 @@
 """Router Quản trị viên (Admin) (FR-08..12, FR-15, BR-08..11, TC-14..22, TC-32, TC-34..35)."""
+import csv
+import io
 import json
 import os
 import time
@@ -6,6 +8,7 @@ import uuid
 from datetime import datetime
 from typing import Optional
 from fastapi import APIRouter, BackgroundTasks, Depends, File, HTTPException, Query, Request, Response, UploadFile, status
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 from sqlalchemy import func
 from sqlalchemy.orm import Session, joinedload
@@ -1123,3 +1126,132 @@ def admin_confirm_qr_payment(
         "STATUS_CHANGED",
     )
     return OrderOut.model_validate(order)
+
+
+# ----------------- XUẤT BÁO CÁO DOANH THU & ĐƠN HÀNG RA CSV (CHỈ ADMIN - T3D2F95) -----------------
+@router.get("/reports/revenue-csv")
+def admin_export_revenue_csv(
+    date_from: Optional[str] = Query(None, description="YYYY-MM-DD"),
+    date_to: Optional[str] = Query(None, description="YYYY-MM-DD"),
+    db: Session = Depends(get_db),
+    current_admin: User = Depends(get_current_admin),
+):
+    """Xuất CSV doanh thu theo ngày dựa trên khoảng thời gian đang chọn; chỉ Admin (T3D2F95)."""
+    query = db.query(Order)
+    if date_from:
+        try:
+            dt_from = datetime.strptime(date_from.strip(), "%Y-%m-%d").replace(hour=0, minute=0, second=0)
+            query = query.filter(Order.created_at >= dt_from)
+        except ValueError:
+            pass
+    if date_to:
+        try:
+            dt_to = datetime.strptime(date_to.strip(), "%Y-%m-%d").replace(hour=23, minute=59, second=59)
+            query = query.filter(Order.created_at <= dt_to)
+        except ValueError:
+            pass
+
+    orders = query.order_by(Order.created_at.asc()).all()
+    daily_map: dict[str, dict] = {}
+    for o in orders:
+        day_str = (o.created_at or datetime.now()).strftime("%Y-%m-%d")
+        if day_str not in daily_map:
+            daily_map[day_str] = {
+                "date": day_str,
+                "total_orders": 0,
+                "completed_orders": 0,
+                "cancelled_orders": 0,
+                "revenue": 0,
+            }
+        d = daily_map[day_str]
+        d["total_orders"] += 1
+        if o.status == "completed":
+            d["completed_orders"] += 1
+            d["revenue"] += int(o.total_amount or 0)
+        elif o.status == "cancelled":
+            d["cancelled_orders"] += 1
+
+    buf = io.StringIO()
+    buf.write("\ufeff")
+    writer = csv.writer(buf)
+    writer.writerow(["Ngay", "Tong so don", "Don hoan thanh", "Don da huy", "Doanh thu (VND)"])
+    for row in sorted(daily_map.values(), key=lambda x: x["date"]):
+        writer.writerow([
+            row["date"],
+            row["total_orders"],
+            row["completed_orders"],
+            row["cancelled_orders"],
+            row["revenue"],
+        ])
+
+    csv_bytes = buf.getvalue().encode("utf-8")
+    return StreamingResponse(
+        io.BytesIO(csv_bytes),
+        media_type="text/csv; charset=utf-8",
+        headers={"Content-Disposition": 'attachment; filename="NightFood_Revenue_By_Day.csv"'},
+    )
+
+
+@router.get("/reports/orders-csv")
+def admin_export_orders_csv(
+    status_filter: Optional[str] = Query(None, alias="status"),
+    search: Optional[str] = Query(None),
+    date_filter: Optional[str] = Query(None, alias="date"),
+    date_from: Optional[str] = Query(None),
+    date_to: Optional[str] = Query(None),
+    db: Session = Depends(get_db),
+    current_admin: User = Depends(get_current_admin),
+):
+    """Xuất CSV danh sách đơn hàng theo bộ lọc đang chọn; chỉ Admin (T3D2F95)."""
+    res = admin_get_orders(
+        status_filter=status_filter,
+        search=search,
+        date_filter=date_filter,
+        date_from=date_from,
+        date_to=date_to,
+        page=1,
+        page_size=100,
+        db=db,
+        current_admin=current_admin,
+    )
+    items = res["items"]
+
+    buf = io.StringIO()
+    buf.write("\ufeff")
+    writer = csv.writer(buf)
+    writer.writerow([
+        "Ma don",
+        "Khach hang",
+        "So dien thoai",
+        "Dia chi",
+        "Khu vuc",
+        "Tam tinh",
+        "Phi ship",
+        "Giam gia",
+        "Tong tien",
+        "Phuong thuc",
+        "Trang thai",
+        "Thoi gian dat",
+    ])
+    for o in items:
+        writer.writerow([
+            o.order_code,
+            o.customer_name,
+            o.phone,
+            o.address,
+            o.area or "Nội thành",
+            o.subtotal,
+            o.shipping_fee,
+            o.discount_amount,
+            o.total_amount,
+            o.payment_method,
+            o.status,
+            o.created_at.strftime("%Y-%m-%d %H:%M:%S") if o.created_at else "",
+        ])
+
+    csv_bytes = buf.getvalue().encode("utf-8")
+    return StreamingResponse(
+        io.BytesIO(csv_bytes),
+        media_type="text/csv; charset=utf-8",
+        headers={"Content-Disposition": 'attachment; filename="NightFood_Orders_Filtered.csv"'},
+    )
