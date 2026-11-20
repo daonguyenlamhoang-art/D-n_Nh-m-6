@@ -131,4 +131,23 @@ searchInput.addEventListener("input", () => {
   searchTimer = setTimeout(loadItems, 300);
 });
 
+async function checkDbHealth() {
+  const badge = document.getElementById("db-health-badge");
+  if (!badge) return;
+  try {
+    const res = await api.get("/health");
+    if (res && res.database === "connected") {
+      badge.textContent = "● MySQL: connected";
+      badge.style.color = "#4ade80";
+    } else {
+      badge.textContent = "● MySQL: disconnected";
+      badge.style.color = "#f87171";
+    }
+  } catch (err) {
+    badge.textContent = "● MySQL: disconnected";
+    badge.style.color = "#f87171";
+  }
+}
+
+checkDbHealth();
 loadItems();
