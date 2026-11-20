@@ -29,8 +29,9 @@ function renderLayout() {
             <span class="pulse-dot" id="header-store-dot" style="color:#22c55e;"></span>
             <span id="header-store-text">Đang kiểm tra trạng thái quán...</span>
           </div>
-          <div>
+          <div style="display:flex; align-items:center; gap:14px; flex-wrap:wrap;">
             <span>⏰ Giờ mở cửa: <strong>18:00 - 02:00</strong> hằng đêm | 🛵 Giao nhanh trong 20 phút</span>
+            <span id="header-mysql-badge" style="padding:2px 10px; border-radius:999px; font-size:0.78rem; font-weight:700; background:rgba(34,197,94,0.15); color:#4ade80; border:1px solid rgba(34,197,94,0.3);">MySQL: connected</span>
           </div>
         </div>
       </div>
@@ -106,6 +107,12 @@ async function initStoreStatus() {
   if (!textEl) return;
 
   try {
+    api.get("/health").then(h => {
+      const mysqlBadge = document.getElementById("header-mysql-badge");
+      if (mysqlBadge && h) {
+        mysqlBadge.textContent = h.mysql_display || (h.database === "connected" ? "MySQL: connected" : "MySQL: disconnected");
+      }
+    }).catch(() => {});
     const statusData = await api.get("/store/status");
     if (statusData.is_open) {
       if (dotEl) {
