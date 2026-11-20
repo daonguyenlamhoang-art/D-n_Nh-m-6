@@ -14,6 +14,11 @@ function formatVND(value) {
   return Number(value).toLocaleString("vi-VN") + "đ";
 }
 
+// Alias tương thích với base code CRUD mẫu (items.js)
+function formatMoney(value) {
+  return formatVND(value);
+}
+
 // Định dạng thời gian
 function formatDateTime(value) {
   if (!value) return "";
