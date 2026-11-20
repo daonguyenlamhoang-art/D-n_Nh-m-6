@@ -1,4 +1,36 @@
-// Module dùng chung cho các trang Admin NightFood (FR-08, FR-15, NFR-04)
+// Module dùng chung cho các trang Admin NightFood (FR-08, FR-15, NFR-04, T3D2D99, T3D2DE9)
+
+document.addEventListener("DOMContentLoaded", () => {
+  enhanceAdminSidebarMenu();
+});
+
+function enhanceAdminSidebarMenu() {
+  const menu = document.querySelector(".admin-menu");
+  if (!menu) return;
+  const currentPath = window.location.pathname;
+  const extraLinks = [
+    { href: "vouchers.html", label: "🎟️ Mã Giảm Giá & Đánh Giá" },
+    { href: "chat.html", label: "💬 Chat Khách Hàng" },
+  ];
+  const lastLi = menu.querySelector("li:last-child");
+  extraLinks.forEach(item => {
+    if (!menu.querySelector(`a[href="${item.href}"]`)) {
+      const li = document.createElement("li");
+      const a = document.createElement("a");
+      a.href = item.href;
+      a.textContent = item.label;
+      if (currentPath.endsWith(item.href)) {
+        a.className = "active";
+      }
+      li.appendChild(a);
+      if (lastLi) {
+        menu.insertBefore(li, lastLi);
+      } else {
+        menu.appendChild(li);
+      }
+    }
+  });
+}
 
 async function checkAdminAuth() {
   try {
