@@ -1,6 +1,6 @@
-"""Model Cart và CartItem (carts, cart_items)"""
+"""Model Cart và CartItem (carts, cart_items) - T3D25C2"""
 from datetime import datetime
-from sqlalchemy import DateTime, Enum, ForeignKey, Integer, String
+from sqlalchemy import DateTime, Enum, ForeignKey, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.db.session import Base
 
@@ -25,6 +25,8 @@ class CartItem(Base):
     cart_id: Mapped[int] = mapped_column(Integer, ForeignKey("carts.id", ondelete="CASCADE"), nullable=False)
     dish_id: Mapped[int] = mapped_column(Integer, ForeignKey("dishes.id", ondelete="CASCADE"), nullable=False)
     dish_option_id: Mapped[int | None] = mapped_column(Integer, ForeignKey("dish_options.id", ondelete="SET NULL"), nullable=True)
+    selected_options_json: Mapped[str | None] = mapped_column(Text, nullable=True)
+    note: Mapped[str | None] = mapped_column(String(255), nullable=True)
     quantity: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
 
     cart = relationship("Cart", back_populates="items")
