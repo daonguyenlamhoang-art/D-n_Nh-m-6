@@ -59,8 +59,10 @@ CREATE TABLE `addresses` (
 CREATE TABLE `categories` (
   `id` INT AUTO_INCREMENT PRIMARY KEY,
   `name` VARCHAR(100) NOT NULL UNIQUE,
+  `sort_order` INT NOT NULL DEFAULT 0,
   `is_active` BOOLEAN NOT NULL DEFAULT TRUE,
-  INDEX `idx_categories_active` (`is_active`)
+  INDEX `idx_categories_active` (`is_active`),
+  INDEX `idx_categories_sort` (`sort_order`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- 4. Bảng dishes: Món ăn, đồ uống, combo ăn đêm
@@ -71,21 +73,29 @@ CREATE TABLE `dishes` (
   `description` TEXT NULL,
   `price` INT NOT NULL,
   `image_url` VARCHAR(500) NULL,
+  `status` VARCHAR(20) NOT NULL DEFAULT 'AVAILABLE',
   `is_available` BOOLEAN DEFAULT TRUE,
   `is_active` BOOLEAN DEFAULT TRUE,
+  `is_featured` BOOLEAN DEFAULT FALSE,
+  `is_combo` BOOLEAN DEFAULT FALSE,
+  `combo_items_json` TEXT NULL,
   `created_at` DATETIME DEFAULT CURRENT_TIMESTAMP,
   `updated_at` DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   FOREIGN KEY (`category_id`) REFERENCES `categories`(`id`) ON DELETE RESTRICT,
   INDEX `idx_dishes_category_active` (`category_id`, `is_active`),
-  INDEX `idx_dishes_available` (`is_available`)
+  INDEX `idx_dishes_available` (`is_available`),
+  INDEX `idx_dishes_featured` (`is_featured`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
--- 5. Bảng dish_options: Tùy chọn món (thêm trứng, thêm phô mai, ...)
+-- 5. Bảng dish_options: Tùy chọn món (Size, Topping: thêm trứng, thêm phô mai, ...)
 CREATE TABLE `dish_options` (
   `id` INT AUTO_INCREMENT PRIMARY KEY,
   `dish_id` INT NOT NULL,
+  `option_group` VARCHAR(50) NOT NULL DEFAULT 'Topping',
   `option_name` VARCHAR(100) NOT NULL,
   `extra_price` INT NOT NULL DEFAULT 0,
+  `is_required` BOOLEAN DEFAULT FALSE,
+  `max_select` INT NOT NULL DEFAULT 1,
   `is_active` BOOLEAN DEFAULT TRUE,
   FOREIGN KEY (`dish_id`) REFERENCES `dishes`(`id`) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
