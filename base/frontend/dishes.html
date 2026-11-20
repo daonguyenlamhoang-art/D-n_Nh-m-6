@@ -20,15 +20,45 @@
         </p>
       </div>
 
-      <!-- Ô tìm kiếm (FR-03) -->
+      <!-- Ô tìm kiếm có gợi ý khi gõ (debounce - T3D251C) -->
       <div class="search-box">
         <span class="search-icon">🔍</span>
         <input 
           type="text" 
           id="search-input" 
           class="search-input" 
+          autocomplete="off"
           placeholder="Tìm tên món (mì trộn, gà sốt, khoai...)" 
           maxlength="100">
+        <div id="search-suggestions" class="search-suggestions"></div>
+      </div>
+    </div>
+
+    <!-- Thanh bộ lọc khoảng giá, trạng thái còn bán và sắp xếp (T3D251C) -->
+    <div class="card-panel" style="padding:14px 18px; margin-bottom:18px; display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:14px;">
+      <div style="display:flex; align-items:center; gap:12px; flex-wrap:wrap;">
+        <select id="filter-price-range" class="form-control" style="width:auto; padding:7px 12px; font-size:0.88rem;">
+          <option value="">💰 Tất cả mức giá</option>
+          <option value="0-30000">Dưới 30.000đ</option>
+          <option value="30000-50000">Từ 30.000đ - 50.000đ</option>
+          <option value="50000-999999">Trên 50.000đ</option>
+        </select>
+
+        <label style="display:flex; align-items:center; gap:6px; cursor:pointer; font-size:0.88rem; color:var(--text-muted);">
+          <input type="checkbox" id="filter-available-only">
+          <span>Chỉ hiện món còn bán</span>
+        </label>
+      </div>
+
+      <div style="display:flex; align-items:center; gap:10px;">
+        <span style="font-size:0.85rem; color:var(--text-dim);">Sắp xếp:</span>
+        <select id="filter-sort-by" class="form-control" style="width:auto; padding:7px 12px; font-size:0.88rem;">
+          <option value="">Mặc định</option>
+          <option value="price_asc">Giá: Thấp → Cao</option>
+          <option value="price_desc">Giá: Cao → Thấp</option>
+          <option value="bestseller">🔥 Bán chạy nhất</option>
+          <option value="rating">⭐ Đánh giá cao</option>
+        </select>
       </div>
     </div>
 
@@ -43,6 +73,9 @@
         Đang tải thực đơn đêm...
       </div>
     </div>
+
+    <!-- Phân trang (T3D2354, T3D251C) -->
+    <div id="dishes-pagination" style="display:flex; justify-content:center; gap:8px; margin-bottom:32px;"></div>
 
     <!-- Dải thông báo ưu đãi cuối trang chuẩn Figma -->
     <div style="background: linear-gradient(90deg, #1e293b, #2a1b14); border: 1px dashed rgba(249,115,22,0.4); border-radius: var(--radius-md); padding: 18px 24px; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 14px; margin-top: 20px;">
